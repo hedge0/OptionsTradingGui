@@ -12,35 +12,28 @@ class DataGenerator:
         self.data = self.generate_smile_data()
 
     def generate_smile_data(self):
-        # Generate 40 data points instead of 20
         x = np.linspace(0.6, 1.4, 40)
         y_mid = self.at_the_money_vol + self.skew * (x - 1) ** 2 - self.kurtosis * (x - 1) ** 4
         y_mid += np.random.normal(0, 0.015, size=x.shape)
-        
-        # Randomly generate spread values
-        spread_factors = np.random.uniform(0.01, 0.05, size=x.shape)  # Adjust min and max values as needed
-        y_bid = y_mid - spread_factors
-        y_ask = y_mid + spread_factors
-        
-        # Ensure bid prices are below mid and ask prices are above mid
-        y_bid = np.maximum(y_bid, 0.0)  # Minimum volatility constraint
-        y_ask = np.minimum(y_ask, 1.0)  # Maximum volatility constraint
-        
+        spread_factors = np.random.uniform(0.01, 0.05, size=x.shape)
+        y_bid = np.maximum(y_mid - spread_factors, 0.0)
+        y_ask = np.minimum(y_mid + spread_factors, 1.0)
         return y_mid, y_bid, y_ask, x
 
     def update_data(self):
         self.data = self.generate_smile_data()
-        print("Data updated:", self.data)
 
 class App:
     def __init__(self, root):
         self.root = root
         self.root.title("Implied Volatility Smile Simulation")
-        self.figure, self.ax = plt.subplots(figsize=(8, 6))  # Increased figure size for clarity
+        self.figure, self.ax = plt.subplots(figsize=(8, 6))
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.data_gen = DataGenerator()
-        self.style_plot()
+        self.fine_x = np.linspace(0.6, 1.4, 200)
+        self.fine_k = np.log(self.fine_x)
+        self.setup_plot()
         self.update_plot()
         self.update_data_and_plot()
 
@@ -56,50 +49,48 @@ class App:
         initial_guess = [0.01, 0.5, -0.3, 0.0, 0.2]
         bounds = [(0, 1), (0, 1), (-1, 1), (-1, 1), (0.01, 1)]
         result = minimize(self.objective_function, initial_guess, args=(k, y), method='L-BFGS-B', bounds=bounds)
-        if not result.success:
-            print("Optimization failed:", result.message)
         return result.x
 
-    def style_plot(self):
-        # Set the background color to dark
+    def setup_plot(self):
         self.ax.set_facecolor('#1c1c1c')
         self.figure.patch.set_facecolor('#1c1c1c')
-        
-        # Set the grid lines to be less prominent
         self.ax.grid(True, color='#444444')
-        
-        # Set the tick and label colors to white
         self.ax.tick_params(colors='white')
         self.ax.yaxis.label.set_color('white')
         self.ax.xaxis.label.set_color('white')
         self.ax.title.set_color('white')
-
-    def update_plot(self):
-        self.ax.clear()
-        self.style_plot()  # Re-apply the styling
-        
-        y_mid, y_bid, y_ask, x = self.data_gen.data
-        
-        # Plot bid, ask, and midpoints, with a larger size for the midpoint
-        for i in range(len(x)):
-            self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)  # Vertical line
-            self.ax.scatter([x[i]], [y_mid[i]], color='red', s=20)  # Larger Midpoint
-            self.ax.scatter([x[i]], [y_bid[i]], color='red', s=10)  # Bid
-            self.ax.scatter([x[i]], [y_ask[i]], color='red', s=10)  # Ask
-        
-        params = self.fit_svi(x, y_mid)
-        fine_x = np.linspace(min(x), max(x), 200)  # Increased number of points for a smoother fit line
-        fine_k = np.log(fine_x)
-        interpolated_y = self.svi_model(fine_k, params)
-        self.ax.plot(fine_x, interpolated_y, color='green', label="SVI Fit", linewidth=1.5)
-        
-        # Set a fixed y-axis range
-        self.ax.set_ylim(0.0, 0.75)  # Adjust these values as necessary to accommodate your data
-        
+        self.ax.set_ylim(0.0, 0.75)
         self.ax.set_title("Implied Volatility Smile")
         self.ax.set_xlabel("Moneyness = Strike / Forward Price")
         self.ax.set_ylabel("Implied Volatility")
-        self.ax.legend(loc='upper left', fontsize='small', facecolor='green', edgecolor='white')
+
+    def update_plot(self):
+        y_mid, y_bid, y_ask, x = self.data_gen.data
+
+        if hasattr(self, 'midpoints'):
+            self.midpoints.set_offsets(np.c_[x, y_mid])
+            self.bids.set_offsets(np.c_[x, y_bid])
+            self.asks.set_offsets(np.c_[x, y_ask])
+            
+            # Update the lines connecting bid and ask to midpoints
+            for i, line in enumerate(self.lines):
+                line.set_data([x[i], x[i]], [y_bid[i], y_ask[i]])
+        else:
+            self.bids = self.ax.scatter(x, y_bid, color='red', s=10, label="Bid")
+            self.asks = self.ax.scatter(x, y_ask, color='red', s=10, label="Ask")
+            self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
+            
+            # Draw lines connecting bid and ask to midpoints
+            self.lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
+
+        params = self.fit_svi(x, y_mid)
+        interpolated_y = self.svi_model(self.fine_k, params)
+
+        if hasattr(self, 'fit_line'):
+            self.fit_line.set_data(self.fine_x, interpolated_y)
+        else:
+            self.fit_line, = self.ax.plot(self.fine_x, interpolated_y, color='green', label="SVI Fit", linewidth=1.5)
+
         self.canvas.draw()
 
     def update_data_and_plot(self):
