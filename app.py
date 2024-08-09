@@ -6,9 +6,27 @@ import numpy as np
 from scipy.optimize import minimize
 from tastytrade import Session
 from tastytrade.utils import TastytradeError
+from dotenv import load_dotenv
+import os
 
-# Declare session as a global variable
+# Load environment variables from .env file
+load_dotenv()
+
+# Global session and config
 session = None
+config = {}
+
+def load_config():
+    global config
+    config = {
+        "TASTYTRADE_USERNAME": os.getenv('TASTYTRADE_USERNAME'),
+        "TASTYTRADE_PASSWORD": os.getenv('TASTYTRADE_PASSWORD'),
+        "TASTYTRADE_ACCOUNT_NUMBER": os.getenv('TASTYTRADE_ACCOUNT_NUMBER'),
+    }
+
+    for key, value in config.items():
+        if value is None:
+            raise ValueError(f"{key} environment variable not set")
 
 class DataGenerator:
     def __init__(self, at_the_money_vol=0.2, skew=1.5, kurtosis=0.8):
@@ -108,10 +126,12 @@ def show_login():
 
     tk.Label(login_window, text="Username:").pack(pady=5)
     username_entry = tk.Entry(login_window)
+    username_entry.insert(0, config['TASTYTRADE_USERNAME'])
     username_entry.pack(pady=5)
 
     tk.Label(login_window, text="Password:").pack(pady=5)
     password_entry = tk.Entry(login_window, show="*")
+    password_entry.insert(0, config['TASTYTRADE_PASSWORD'])
     password_entry.pack(pady=5)
 
     def check_credentials():
@@ -139,4 +159,5 @@ def open_main_app():
     root.mainloop()
 
 if __name__ == "__main__":
+    load_config()
     show_login()
