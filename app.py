@@ -1,8 +1,14 @@
 import tkinter as tk
+from tkinter import messagebox
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 from scipy.optimize import minimize
+from tastytrade import Session
+from tastytrade.utils import TastytradeError
+
+# Declare session as a global variable
+session = None
 
 class DataGenerator:
     def __init__(self, at_the_money_vol=0.2, skew=1.5, kurtosis=0.8):
@@ -72,15 +78,12 @@ class App:
             self.bids.set_offsets(np.c_[x, y_bid])
             self.asks.set_offsets(np.c_[x, y_ask])
             
-            # Update the lines connecting bid and ask to midpoints
             for i, line in enumerate(self.lines):
                 line.set_data([x[i], x[i]], [y_bid[i], y_ask[i]])
         else:
             self.bids = self.ax.scatter(x, y_bid, color='red', s=10, label="Bid")
             self.asks = self.ax.scatter(x, y_ask, color='red', s=10, label="Ask")
             self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
-            
-            # Draw lines connecting bid and ask to midpoints
             self.lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
 
         params = self.fit_svi(x, y_mid)
@@ -98,7 +101,42 @@ class App:
         self.update_plot()
         self.root.after(5000, self.update_data_and_plot)
 
-if __name__ == "__main__":
+def show_login():
+    login_window = tk.Tk()
+    login_window.title("Login")
+    login_window.geometry("300x200")
+
+    tk.Label(login_window, text="Username:").pack(pady=5)
+    username_entry = tk.Entry(login_window)
+    username_entry.pack(pady=5)
+
+    tk.Label(login_window, text="Password:").pack(pady=5)
+    password_entry = tk.Entry(login_window, show="*")
+    password_entry.pack(pady=5)
+
+    def check_credentials():
+        global session  # Declare session as global
+        username = username_entry.get()
+        password = password_entry.get()
+        try:
+            session = Session(login=username, password=password, remember_me=True)
+            messagebox.showinfo("Login Success", "Login successful!")
+            login_window.destroy()
+            open_main_app()
+        except TastytradeError as e:
+            if "invalid_credentials" in str(e):
+                messagebox.showerror("Login Failed", "Incorrect Username or Password")
+            else:
+                messagebox.showerror("Login Failed", f"An error occurred: {str(e)}")
+
+    tk.Button(login_window, text="Login", command=check_credentials).pack(pady=20)
+
+    login_window.mainloop()
+
+def open_main_app():
     root = tk.Tk()
     app = App(root)
     root.mainloop()
+
+if __name__ == "__main__":
+    show_login()
