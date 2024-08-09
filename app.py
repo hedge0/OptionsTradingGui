@@ -61,7 +61,7 @@ class App:
         self.ax.title.set_color('white')
         self.ax.set_ylim(0.0, 0.75)
         self.ax.set_title("Implied Volatility Smile")
-        self.ax.set_xlabel("Moneyness = Strike / Forward Price")
+        self.ax.set_xlabel("Strike K")
         self.ax.set_ylabel("Implied Volatility")
 
     def update_plot(self):
