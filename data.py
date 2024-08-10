@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from tastytrade import Session, Account
 from tastytrade.utils import TastytradeError
+from tastytrade.instruments import NestedOptionChain
 
 # Load environment variables from .env file
 load_dotenv()
@@ -12,6 +13,7 @@ config = {}
 # Global variables for Tastytrade
 session = None
 account = None
+chain = None
 
 def load_config():
     """
@@ -35,7 +37,7 @@ def main():
     """
     Main function to initialize the bot.
     """
-    global session, account
+    global session, account, chain
 
     load_config()
 
@@ -51,12 +53,25 @@ def main():
 
     try:
         account = Account.get_account(session, config["TASTYTRADE_ACCOUNT_NUMBER"])
-        print(account)
     except TastytradeError as e:
         if "record_not_found" in str(e):
             print(f"Invalid account number: {config['TASTYTRADE_ACCOUNT_NUMBER']}. Please check the account number and try again.")
+            return
         else:
             raise  # Re-raise if the error is not specifically about the account number
+
+    try:
+        ticker = 'AMZN'
+        chain = NestedOptionChain.get_chain(session, ticker)
+    except TastytradeError as e:
+        if "record_not_found" in str(e):
+            print(f"Invalid ticker symbol: {ticker}. Please try again.")
+            return
+        else:
+            raise  # Re-raise if the error is not specifically about the ticker symbol
+
+    if chain is not None:
+        print(chain.expirations[0].expiration_date)
 
 if __name__ == '__main__':
     main()

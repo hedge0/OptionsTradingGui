@@ -197,7 +197,7 @@ class App:
     def update_data_and_plot(self):
         self.data_gen.update_data()
         self.update_plot()
-        self.root.after(15000, self.update_data_and_plot)  # 15 seconds interval
+        self.root.after(10000, self.update_data_and_plot)  # 15 seconds interval
 
 def show_login():
     login_window = tk.Tk()
