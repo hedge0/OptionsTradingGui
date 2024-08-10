@@ -49,9 +49,14 @@ def main():
         else:
             raise  # Re-raise if the error is not about invalid credentials
 
-    account = Account.get_account(session, config["TASTYTRADE_ACCOUNT_NUMBER"])
-
-    print(account)
+    try:
+        account = Account.get_account(session, config["TASTYTRADE_ACCOUNT_NUMBER"])
+        print(account)
+    except TastytradeError as e:
+        if "record_not_found" in str(e):
+            print(f"Invalid account number: {config['TASTYTRADE_ACCOUNT_NUMBER']}. Please check the account number and try again.")
+        else:
+            raise  # Re-raise if the error is not specifically about the account number
 
 if __name__ == '__main__':
     main()
