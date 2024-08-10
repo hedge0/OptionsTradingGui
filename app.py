@@ -47,8 +47,76 @@ class DataGenerator:
     def update_data(self):
         self.data = self.generate_smile_data()
 
+def show_login():
+    login_window = tk.Tk()
+    login_window.title("Login")
+    login_window.geometry("300x200")
+
+    tk.Label(login_window, text="Username:").pack(pady=5)
+    username_entry = tk.Entry(login_window)
+    username_entry.insert(0, config['TASTYTRADE_USERNAME'])
+    username_entry.pack(pady=5)
+
+    tk.Label(login_window, text="Password:").pack(pady=5)
+    password_entry = tk.Entry(login_window, show="*")
+    password_entry.insert(0, config['TASTYTRADE_PASSWORD'])
+    password_entry.pack(pady=5)
+
+    def check_credentials():
+        global session
+        username = username_entry.get()
+        password = password_entry.get()
+        try:
+            session = Session(login=username, password=password, remember_me=True)
+            messagebox.showinfo("Login Success", "Login successful!")
+
+            for widget in login_window.winfo_children():
+                widget.pack_forget()
+            
+            tk.Label(login_window, text="Account Number:").pack(pady=5)
+            account_entry = tk.Entry(login_window)
+            account_entry.insert(0, config['TASTYTRADE_ACCOUNT_NUMBER'])
+            account_entry.pack(pady=5)
+
+            tk.Label(login_window, text="Ticker:").pack(pady=5)
+            ticker_entry = tk.Entry(login_window)
+            ticker_entry.insert(0, "SPY")  # Set default value to "SPY"
+            ticker_entry.pack(pady=5)
+
+            def validate_account_and_open_plot():
+                global account
+                account_number = account_entry.get()
+                ticker = ticker_entry.get()  # Get the entered ticker value
+                try:
+                    account = Account.get_account(session, account_number)
+                    messagebox.showinfo("Account Validated", "Account number validated successfully!")
+                    login_window.destroy()
+                    open_main_app(ticker)  # Pass the ticker to the main app
+                except TastytradeError as e:
+                    if "record_not_found" in str(e):
+                        messagebox.showerror("Validation Failed", f"Invalid account number: {account_number}. Please check and try again.")
+                    else:
+                        messagebox.showerror("Validation Failed", f"An error occurred: {str(e)}")
+
+            tk.Button(login_window, text="Enter", command=validate_account_and_open_plot).pack(pady=20)
+
+        except TastytradeError as e:
+            if "invalid_credentials" in str(e):
+                messagebox.showerror("Login Failed", "Incorrect Username or Password")
+            else:
+                messagebox.showerror("Login Failed", f"An error occurred: {str(e)}")
+
+    tk.Button(login_window, text="Login", command=check_credentials).pack(pady=20)
+
+    login_window.mainloop()
+
+def open_main_app(ticker):
+    root = tk.Tk()
+    app = App(root, ticker)  # Pass the ticker to the App class
+    root.mainloop()
+
 class App:
-    def __init__(self, root):
+    def __init__(self, root, ticker):
         self.root = root
         self.root.title("Implied Volatility Smile Simulation")
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
@@ -57,6 +125,7 @@ class App:
         self.data_gen = DataGenerator()
         self.fine_x = np.linspace(0.6, 1.4, 200)
         self.selected_method = tk.StringVar(value="RFV")
+        self.ticker = ticker  # Store the ticker value
 
         style = ttk.Style()
         style.theme_use('clam')
@@ -97,9 +166,14 @@ class App:
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
                                         values=["RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
-        
-        tk.Button(selection_and_metrics_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT)
 
+        # Add a filter input field
+        tk.Label(selection_and_metrics_frame, text="Max Spread:").pack(side=tk.LEFT, padx=5)
+        self.spread_filter_var = tk.StringVar(value="0.0")
+        self.spread_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.spread_filter_var, width=10)
+        self.spread_filter_entry.pack(side=tk.LEFT, padx=5)
+
+        tk.Button(selection_and_metrics_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT)
 
     def svi_model(self, k, params):
         a, b, rho, m, sigma = params
@@ -152,25 +226,44 @@ class App:
         self.ax.xaxis.label.set_color('white')
         self.ax.title.set_color('white')
         self.ax.set_ylim(0.0, 0.75)
-        self.ax.set_title("Implied Volatility Smile")
+        self.ax.set_title(f"{self.ticker}")
         self.ax.set_xlabel("Strike K")
         self.ax.set_ylabel("Implied Volatility")
 
     def update_plot(self):
         y_mid, y_bid, y_ask, x = self.data_gen.data
 
+        # Apply the bid-ask spread filter if necessary
+        try:
+            max_spread = float(self.spread_filter_var.get())
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Max Bid-Ask Spread.")
+            return
+        
+        if max_spread > 0.0:
+            mask = (y_ask - y_bid) <= max_spread
+            x = x[mask]
+            y_mid = y_mid[mask]
+            y_bid = y_bid[mask]
+            y_ask = y_ask[mask]
+
+        # Check if any data points remain after filtering
+        if len(x) == 0:
+            messagebox.showwarning("No Data", "All data points were filtered out. Adjust the spread filter.")
+            return
+
+        # Clear previous scatter plots if they exist
         if hasattr(self, 'midpoints'):
-            self.midpoints.set_offsets(np.c_[x, y_mid])
-            self.bids.set_offsets(np.c_[x, y_bid])
-            self.asks.set_offsets(np.c_[x, y_ask])
-            
-            for i, line in enumerate(self.lines):
-                line.set_data([x[i], x[i]], [y_bid[i], y_ask[i]])
-        else:
-            self.bids = self.ax.scatter(x, y_bid, color='red', s=10, label="Bid")
-            self.asks = self.ax.scatter(x, y_ask, color='red', s=10, label="Ask")
-            self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
-            self.lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
+            self.midpoints.remove()
+            self.bids.remove()
+            self.asks.remove()
+            for line in self.lines:
+                line.remove()
+
+        self.bids = self.ax.scatter(x, y_bid, color='red', s=10, label="Bid")
+        self.asks = self.ax.scatter(x, y_ask, color='red', s=10, label="Ask")
+        self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
+        self.lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
 
         model = {
             "SVI": self.svi_model,
@@ -197,73 +290,7 @@ class App:
     def update_data_and_plot(self):
         self.data_gen.update_data()
         self.update_plot()
-        self.root.after(10000, self.update_data_and_plot)  # 15 seconds interval
-
-def show_login():
-    login_window = tk.Tk()
-    login_window.title("Login")
-    login_window.geometry("300x200")
-
-    tk.Label(login_window, text="Username:").pack(pady=5)
-    username_entry = tk.Entry(login_window)
-    username_entry.insert(0, config['TASTYTRADE_USERNAME'])
-    username_entry.pack(pady=5)
-
-    tk.Label(login_window, text="Password:").pack(pady=5)
-    password_entry = tk.Entry(login_window, show="*")
-    password_entry.insert(0, config['TASTYTRADE_PASSWORD'])
-    password_entry.pack(pady=5)
-
-    def check_credentials():
-        global session
-        username = username_entry.get()
-        password = password_entry.get()
-        try:
-            session = Session(login=username, password=password, remember_me=True)
-            messagebox.showinfo("Login Success", "Login successful!")
-
-            for widget in login_window.winfo_children():
-                widget.pack_forget()
-            
-            tk.Label(login_window, text="Account Number:").pack(pady=5)
-            account_entry = tk.Entry(login_window)
-            account_entry.insert(0, config['TASTYTRADE_ACCOUNT_NUMBER'])
-            account_entry.pack(pady=5)
-
-            tk.Label(login_window, text="Ticker:").pack(pady=5)
-            ticker_entry = tk.Entry(login_window)
-            ticker_entry.pack(pady=5)
-
-            def validate_account_and_open_plot():
-                global account
-                account_number = account_entry.get()
-                try:
-                    account = Account.get_account(session, account_number)
-                    messagebox.showinfo("Account Validated", "Account number validated successfully!")
-                    login_window.destroy()
-                    open_main_app()
-                except TastytradeError as e:
-                    if "record_not_found" in str(e):
-                        messagebox.showerror("Validation Failed", f"Invalid account number: {account_number}. Please check and try again.")
-                    else:
-                        messagebox.showerror("Validation Failed", f"An error occurred: {str(e)}")
-
-            tk.Button(login_window, text="Enter", command=validate_account_and_open_plot).pack(pady=20)
-
-        except TastytradeError as e:
-            if "invalid_credentials" in str(e):
-                messagebox.showerror("Login Failed", "Incorrect Username or Password")
-            else:
-                messagebox.showerror("Login Failed", f"An error occurred: {str(e)}")
-
-    tk.Button(login_window, text="Login", command=check_credentials).pack(pady=20)
-
-    login_window.mainloop()
-
-def open_main_app():
-    root = tk.Tk()
-    app = App(root)
-    root.mainloop()
+        self.root.after(10000, self.update_data_and_plot)  # 10 seconds interval
 
 if __name__ == "__main__":
     load_config()
