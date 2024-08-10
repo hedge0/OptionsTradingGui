@@ -58,9 +58,8 @@ class App:
         self.fine_x = np.linspace(0.6, 1.4, 200)
         self.selected_method = tk.StringVar(value="RFV")
 
-        # Modify style for Combobox to prevent item highlighting
         style = ttk.Style()
-        style.theme_use('clam')  # Change to 'clam' or other theme
+        style.theme_use('clam')
 
         style.configure("TCombobox",
                         fieldbackground="white", background="white",
@@ -79,15 +78,14 @@ class App:
         self.update_data_and_plot()
 
     def create_dropdown_and_button(self):
-        # Create a dropdown menu for selecting the interpolation method
         dropdown_frame = tk.Frame(self.root)
         dropdown_frame.pack(side=tk.TOP, anchor=tk.NE, padx=10, pady=10)
         
         tk.Label(dropdown_frame, text="Select Model:").pack(side=tk.LEFT)
-        self.method_menu = ttk.Combobox(dropdown_frame, textvariable=self.selected_method, values=["SVI", "SLV", "RFV"], state="readonly", style="TCombobox")
+        self.method_menu = ttk.Combobox(dropdown_frame, textvariable=self.selected_method, 
+                                        values=["RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
         
-        # Create the Enter button
         tk.Button(dropdown_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT)
 
     def svi_model(self, k, params):
@@ -101,6 +99,10 @@ class App:
     def rfv_model(self, k, params):
         a, b, c, d, e = params
         return (a + b*k + c*k**2) / (1 + d*k + e*k**2)
+
+    def sabr_model(self, k, params):
+        alpha, beta, rho, nu, f0 = params
+        return alpha * (1 + beta * k + rho * k**2 + nu * k**3 + f0 * k**4)
 
     def objective_function(self, params, k, y, model):
         return np.sum((model(k, params) - y) ** 2)
@@ -145,15 +147,12 @@ class App:
             self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
             self.lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
 
-        # Select the interpolation model based on the dropdown selection
-        if self.selected_method.get() == "SVI":
-            model = self.svi_model
-        elif self.selected_method.get() == "SLV":
-            model = self.slv_model
-        elif self.selected_method.get() == "RFV":
-            model = self.rfv_model
-        else:
-            raise ValueError("Unknown model selected")
+        model = {
+            "SVI": self.svi_model,
+            "SLV": self.slv_model,
+            "RFV": self.rfv_model,
+            "SABR": self.sabr_model
+        }.get(self.selected_method.get())
 
         params = self.fit_model(x, y_mid, model)
         interpolated_y = model(np.log(self.fine_x), params)
@@ -169,6 +168,7 @@ class App:
         self.data_gen.update_data()
         self.update_plot()
         self.root.after(5000, self.update_data_and_plot)
+
 
 def show_login():
     login_window = tk.Tk()
