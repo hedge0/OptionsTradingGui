@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
@@ -9,6 +9,7 @@ from tastytrade.utils import TastytradeError
 from dotenv import load_dotenv
 import os
 
+# Load environment variables
 load_dotenv()
 
 config = {}
@@ -55,23 +56,64 @@ class App:
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.data_gen = DataGenerator()
         self.fine_x = np.linspace(0.6, 1.4, 200)
-        self.fine_k = np.log(self.fine_x)
+        self.selected_method = tk.StringVar(value="SVI")
+
+        # Modify style for Combobox to prevent item highlighting
+        style = ttk.Style()
+        style.theme_use('clam')  # Change to 'clam' or other theme
+
+        style.configure("TCombobox",
+                        fieldbackground="white", background="white",
+                        selectbackground="white", selectforeground="black")
+
+        style.map('TCombobox',
+                  background=[('readonly', 'white')],
+                  fieldbackground=[('readonly', 'white')],
+                  foreground=[('readonly', 'black')],
+                  selectbackground=[('readonly', 'white')],
+                  selectforeground=[('readonly', 'black')])
+
+        self.create_dropdown_and_button()
         self.setup_plot()
         self.update_plot()
         self.update_data_and_plot()
+
+    def create_dropdown_and_button(self):
+        # Create a dropdown menu for selecting the interpolation method
+        dropdown_frame = tk.Frame(self.root)
+        dropdown_frame.pack(side=tk.TOP, anchor=tk.NE, padx=10, pady=10)
+        
+        tk.Label(dropdown_frame, text="Select Model:").pack(side=tk.LEFT)
+        self.method_menu = ttk.Combobox(dropdown_frame, textvariable=self.selected_method, values=["SVI", "SLV", "RFV"], state="readonly", style="TCombobox")
+        self.method_menu.pack(side=tk.LEFT, padx=5)
+        
+        # Create the Enter button
+        tk.Button(dropdown_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT)
 
     def svi_model(self, k, params):
         a, b, rho, m, sigma = params
         return a + b * (rho * (k - m) + np.sqrt((k - m) ** 2 + sigma ** 2))
 
-    def objective_function(self, params, k, y):
-        return np.sum((self.svi_model(k, params) - y) ** 2)
+    def slv_model(self, k, params):
+        a, b, c, d, e = params
+        return a + b * k + c * k**2 + d * k**3 + e * k**4
 
-    def fit_svi(self, x, y):
+    def rfv_model(self, k, params):
+        a, b, c, d, e = params
+        return (a + b*k + c*k**2) / (1 + d*k + e*k**2)
+
+    def objective_function(self, params, k, y, model):
+        return np.sum((model(k, params) - y) ** 2)
+
+    def fit_model(self, x, y, model):
         k = np.log(x)
-        initial_guess = [0.01, 0.5, -0.3, 0.0, 0.2]
-        bounds = [(0, 1), (0, 1), (-1, 1), (-1, 1), (0.01, 1)]
-        result = minimize(self.objective_function, initial_guess, args=(k, y), method='L-BFGS-B', bounds=bounds)
+        if model == self.svi_model:
+            initial_guess = [0.01, 0.5, -0.3, 0.0, 0.2]
+            bounds = [(0, 1), (0, 1), (-1, 1), (-1, 1), (0.01, 1)]
+        else:
+            initial_guess = [0.2, 0.3, 0.1, 0.2, 0.1]
+            bounds = [(None, None), (None, None), (None, None), (None, None), (None, None)]
+        result = minimize(self.objective_function, initial_guess, args=(k, y, model), method='L-BFGS-B', bounds=bounds)
         return result.x
 
     def setup_plot(self):
@@ -103,13 +145,23 @@ class App:
             self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
             self.lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
 
-        params = self.fit_svi(x, y_mid)
-        interpolated_y = self.svi_model(self.fine_k, params)
+        # Select the interpolation model based on the dropdown selection
+        if self.selected_method.get() == "SVI":
+            model = self.svi_model
+        elif self.selected_method.get() == "SLV":
+            model = self.slv_model
+        elif self.selected_method.get() == "RFV":
+            model = self.rfv_model
+        else:
+            raise ValueError("Unknown model selected")
+
+        params = self.fit_model(x, y_mid, model)
+        interpolated_y = model(np.log(self.fine_x), params)
 
         if hasattr(self, 'fit_line'):
             self.fit_line.set_data(self.fine_x, interpolated_y)
         else:
-            self.fit_line, = self.ax.plot(self.fine_x, interpolated_y, color='green', label="SVI Fit", linewidth=1.5)
+            self.fit_line, = self.ax.plot(self.fine_x, interpolated_y, color='green', label="Fit", linewidth=1.5)
 
         self.canvas.draw()
 
