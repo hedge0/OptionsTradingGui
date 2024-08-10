@@ -6,6 +6,7 @@ import numpy as np
 from scipy.optimize import minimize
 from tastytrade import Session, Account
 from tastytrade.utils import TastytradeError
+from tastytrade.instruments import NestedOptionChain
 from dotenv import load_dotenv
 import os
 
@@ -15,6 +16,7 @@ load_dotenv()
 config = {}
 session = None
 account = None
+chain = None
 
 def load_config():
     global config
@@ -63,7 +65,7 @@ def show_login():
     password_entry.pack(pady=5)
 
     def check_credentials():
-        global session
+        global session, account, chain
         username = username_entry.get()
         password = password_entry.get()
         try:
@@ -84,19 +86,33 @@ def show_login():
             ticker_entry.pack(pady=5)
 
             def validate_account_and_open_plot():
-                global account
+                global account, chain
                 account_number = account_entry.get()
                 ticker = ticker_entry.get()  # Get the entered ticker value
                 try:
                     account = Account.get_account(session, account_number)
                     messagebox.showinfo("Account Validated", "Account number validated successfully!")
-                    login_window.destroy()
-                    open_main_app(ticker)  # Pass the ticker to the main app
                 except TastytradeError as e:
                     if "record_not_found" in str(e):
                         messagebox.showerror("Validation Failed", f"Invalid account number: {account_number}. Please check and try again.")
+                        return
                     else:
                         messagebox.showerror("Validation Failed", f"An error occurred: {str(e)}")
+                        return
+
+                try:
+                    chain = NestedOptionChain.get_chain(session, ticker)
+                    messagebox.showinfo("Ticker Validated", "Ticker validated successfully!")
+                except TastytradeError as e:
+                    if "record_not_found" in str(e):
+                        messagebox.showerror("Validation Failed", f"Invalid ticker symbol: {ticker}. Please check and try again.")
+                        return
+                    else:
+                        messagebox.showerror("Validation Failed", f"An error occurred: {str(e)}")
+                        return
+
+                login_window.destroy()
+                open_main_app(ticker)  # Pass the ticker to the main app
 
             tk.Button(login_window, text="Enter", command=validate_account_and_open_plot).pack(pady=20)
 
