@@ -36,7 +36,7 @@ class DataGenerator:
         self.data = self.generate_smile_data()
 
     def generate_smile_data(self):
-        x = np.linspace(0.6, 1.4, 40)
+        x = np.linspace(0.6, 1.4, 80)
         y_mid = self.at_the_money_vol + self.skew * (x - 1) ** 2 - self.kurtosis * (x - 1) ** 4
         y_mid += np.random.normal(0, 0.015, size=x.shape)
         spread_factors = np.random.uniform(0.01, 0.05, size=x.shape)
@@ -81,12 +81,25 @@ class App:
         dropdown_frame = tk.Frame(self.root)
         dropdown_frame.pack(side=tk.TOP, anchor=tk.NE, padx=10, pady=10)
         
-        tk.Label(dropdown_frame, text="Select Model:").pack(side=tk.LEFT)
-        self.method_menu = ttk.Combobox(dropdown_frame, textvariable=self.selected_method, 
+        # Metrics display frame (placed first on the left)
+        metrics_frame = tk.Frame(dropdown_frame)
+        metrics_frame.pack(side=tk.LEFT, padx=5)
+
+        # Adjusted metrics label styling
+        self.metrics_text = tk.Label(metrics_frame, text="χ²: N/A    avE5: N/A bps", fg='black', bg=dropdown_frame.cget('background'))
+        self.metrics_text.pack(side=tk.LEFT)
+        
+        # Create a frame for the model selection and metrics
+        selection_and_metrics_frame = tk.Frame(dropdown_frame)
+        selection_and_metrics_frame.pack(side=tk.LEFT)
+
+        tk.Label(selection_and_metrics_frame, text="Select Model:").pack(side=tk.LEFT)
+        self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
                                         values=["RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
         
-        tk.Button(dropdown_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT)
+        tk.Button(selection_and_metrics_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT)
+
 
     def svi_model(self, k, params):
         a, b, rho, m, sigma = params
@@ -117,6 +130,18 @@ class App:
             bounds = [(None, None), (None, None), (None, None), (None, None), (None, None)]
         result = minimize(self.objective_function, initial_guess, args=(k, y, model), method='L-BFGS-B', bounds=bounds)
         return result.x
+
+    def compute_metrics(self, x, y, model, params):
+        k = np.log(x)
+        y_fit = model(k, params)
+        
+        # Chi-Squared Calculation
+        chi_squared = np.sum((y - y_fit) ** 2)
+        
+        # Average Error (avE5) Calculation
+        avE5 = np.mean(np.abs(y - y_fit)) * 10000
+        
+        return chi_squared, avE5
 
     def setup_plot(self):
         self.ax.set_facecolor('#1c1c1c')
@@ -161,14 +186,18 @@ class App:
             self.fit_line.set_data(self.fine_x, interpolated_y)
         else:
             self.fit_line, = self.ax.plot(self.fine_x, interpolated_y, color='green', label="Fit", linewidth=1.5)
+        
+        # Compute and display metrics
+        chi_squared, avE5 = self.compute_metrics(x, y_mid, model, params)
+        
+        self.metrics_text.config(text=f"χ²: {chi_squared:.4f}    avE5: {avE5:.2f} bps")
 
         self.canvas.draw()
 
     def update_data_and_plot(self):
         self.data_gen.update_data()
         self.update_plot()
-        self.root.after(5000, self.update_data_and_plot)
-
+        self.root.after(15000, self.update_data_and_plot)  # 15 seconds interval
 
 def show_login():
     login_window = tk.Tk()
