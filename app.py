@@ -56,7 +56,7 @@ class App:
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.data_gen = DataGenerator()
         self.fine_x = np.linspace(0.6, 1.4, 200)
-        self.selected_method = tk.StringVar(value="SVI")
+        self.selected_method = tk.StringVar(value="RFV")
 
         # Modify style for Combobox to prevent item highlighting
         style = ttk.Style()
