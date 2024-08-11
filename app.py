@@ -169,7 +169,7 @@ class App:
         selection_and_metrics_frame = tk.Frame(dropdown_frame)
         selection_and_metrics_frame.pack(side=tk.LEFT)
 
-        tk.Label(selection_and_metrics_frame, text="Selected Model:").pack(side=tk.LEFT)
+        tk.Label(selection_and_metrics_frame, text="Model:").pack(side=tk.LEFT)
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
                                         values=["RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
