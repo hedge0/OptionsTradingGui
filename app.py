@@ -15,15 +15,15 @@ load_dotenv()
 
 config = {}
 session = None
-account = None
 chain = None
+expiration_to_strikes_map = {}
+expiration_dates_list = []
 
 def load_config():
     global config
     config = {
         "TASTYTRADE_USERNAME": os.getenv('TASTYTRADE_USERNAME'),
         "TASTYTRADE_PASSWORD": os.getenv('TASTYTRADE_PASSWORD'),
-        "TASTYTRADE_ACCOUNT_NUMBER": os.getenv('TASTYTRADE_ACCOUNT_NUMBER'),
     }
 
     for key, value in config.items():
@@ -65,7 +65,7 @@ def show_login():
     password_entry.pack(pady=5)
 
     def check_credentials():
-        global session, account, chain
+        global session, chain
         username = username_entry.get()
         password = password_entry.get()
         try:
@@ -75,34 +75,43 @@ def show_login():
             for widget in login_window.winfo_children():
                 widget.pack_forget()
             
-            tk.Label(login_window, text="Account Number:").pack(pady=5)
-            account_entry = tk.Entry(login_window)
-            account_entry.insert(0, config['TASTYTRADE_ACCOUNT_NUMBER'])
-            account_entry.pack(pady=5)
-
             tk.Label(login_window, text="Ticker:").pack(pady=5)
             ticker_entry = tk.Entry(login_window)
             ticker_entry.insert(0, "SPY")  # Set default value to "SPY"
             ticker_entry.pack(pady=5)
 
-            def validate_account_and_open_plot():
-                global account, chain
-                account_number = account_entry.get()
+            def validate_ticker_and_open_plot():
+                global chain, expiration_to_strikes_map, expiration_dates_list
                 ticker = ticker_entry.get()  # Get the entered ticker value
-                try:
-                    account = Account.get_account(session, account_number)
-                    messagebox.showinfo("Account Validated", "Account number validated successfully!")
-                except TastytradeError as e:
-                    if "record_not_found" in str(e):
-                        messagebox.showerror("Validation Failed", f"Invalid account number: {account_number}. Please check and try again.")
-                        return
-                    else:
-                        messagebox.showerror("Validation Failed", f"An error occurred: {str(e)}")
-                        return
 
                 try:
                     chain = NestedOptionChain.get_chain(session, ticker)
                     messagebox.showinfo("Ticker Validated", "Ticker validated successfully!")
+
+                    # Initialize expiration_to_strikes_map and expiration_dates_list
+                    if chain is not None:
+                        expiration_to_strikes_map = {}
+                        expiration_dates_list = []
+
+                        for expiration in chain.expirations:
+                            calls_map = {}
+                            puts_map = {}
+
+                            for strike in expiration.strikes:
+                                # Populate the calls map
+                                calls_map[strike.strike_price] = (strike.strike_price, strike.call_streamer_symbol)
+                                
+                                # Populate the puts map
+                                puts_map[strike.strike_price] = (strike.strike_price, strike.put_streamer_symbol)
+
+                            # Map each expiration date to the calls and puts map
+                            expiration_to_strikes_map[expiration.expiration_date] = {
+                                "calls": calls_map,
+                                "puts": puts_map
+                            }
+                            # Add the expiration date to the list
+                            expiration_dates_list.append(expiration.expiration_date)
+
                 except TastytradeError as e:
                     if "record_not_found" in str(e):
                         messagebox.showerror("Validation Failed", f"Invalid ticker symbol: {ticker}. Please check and try again.")
@@ -114,7 +123,7 @@ def show_login():
                 login_window.destroy()
                 open_main_app(ticker)  # Pass the ticker to the main app
 
-            tk.Button(login_window, text="Enter", command=validate_account_and_open_plot).pack(pady=20)
+            tk.Button(login_window, text="Enter", command=validate_ticker_and_open_plot).pack(pady=20)
 
         except TastytradeError as e:
             if "invalid_credentials" in str(e):
@@ -178,7 +187,7 @@ class App:
         selection_and_metrics_frame = tk.Frame(dropdown_frame)
         selection_and_metrics_frame.pack(side=tk.LEFT)
 
-        tk.Label(selection_and_metrics_frame, text="Select Model:").pack(side=tk.LEFT)
+        tk.Label(selection_and_metrics_frame, text="Selected Model:").pack(side=tk.LEFT)
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
                                         values=["RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
@@ -188,6 +197,20 @@ class App:
         self.spread_filter_var = tk.StringVar(value="0.0")
         self.spread_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.spread_filter_var, width=10)
         self.spread_filter_entry.pack(side=tk.LEFT, padx=5)
+
+        # Add the Exp. Date dropdown menu
+        tk.Label(selection_and_metrics_frame, text="Exp. Date:").pack(side=tk.LEFT, padx=5)
+        self.exp_date_var = tk.StringVar(value=expiration_dates_list[0])  # Default to the first date
+        self.exp_date_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.exp_date_var, 
+                                        values=expiration_dates_list, state="readonly", style="TCombobox")
+        self.exp_date_menu.pack(side=tk.LEFT, padx=5)
+
+        # Add the Type dropdown menu
+        tk.Label(selection_and_metrics_frame, text="Type:").pack(side=tk.LEFT, padx=5)
+        self.type_var = tk.StringVar(value="calls")  # Default to "calls"
+        self.type_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.type_var, 
+                                    values=["calls", "puts"], state="readonly", style="TCombobox")
+        self.type_menu.pack(side=tk.LEFT, padx=5)
 
         tk.Button(selection_and_metrics_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT)
 
