@@ -18,6 +18,7 @@ config = {}
 session = None
 chain = None
 expiration_to_strikes_map = {}
+streamer_to_strike_map = {}
 expiration_dates_list = []
 
 def load_config():
@@ -63,7 +64,7 @@ def show_login():
             ticker_entry.pack(pady=5)
 
             def validate_ticker_and_open_plot():
-                global chain, expiration_to_strikes_map, expiration_dates_list
+                global chain, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list
                 ticker = ticker_entry.get()  # Get the entered ticker value
 
                 try:
@@ -73,23 +74,26 @@ def show_login():
                     # Initialize expiration_to_strikes_map and expiration_dates_list
                     if chain is not None:
                         expiration_to_strikes_map = {}
+                        streamer_to_strike_map = {}
                         expiration_dates_list = []
 
                         for expiration in chain.expirations:
-                            calls_map = {}
-                            puts_map = {}
+                            calls_list = []
+                            puts_list = []
 
                             for strike in expiration.strikes:
-                                # Populate the calls map
-                                calls_map[strike.strike_price] = (strike.strike_price, strike.call_streamer_symbol)
-                                
-                                # Populate the puts map
-                                puts_map[strike.strike_price] = (strike.strike_price, strike.put_streamer_symbol)
+                                # Populate the calls and puts lists
+                                calls_list.append(strike.call_streamer_symbol)
+                                puts_list.append(strike.put_streamer_symbol)
 
-                            # Map each expiration date to the calls and puts map
+                                # Populate the streamer_to_strike_map
+                                streamer_to_strike_map[strike.call_streamer_symbol] = strike.strike_price
+                                streamer_to_strike_map[strike.put_streamer_symbol] = strike.strike_price
+
+                            # Map each expiration date to the calls and puts lists
                             expiration_to_strikes_map[expiration.expiration_date] = {
-                                "calls": calls_map,
-                                "puts": puts_map
+                                "calls": calls_list,
+                                "puts": puts_list
                             }
                             # Add the expiration date to the list
                             expiration_dates_list.append(expiration.expiration_date)
