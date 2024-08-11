@@ -8,7 +8,7 @@ from tastytrade.instruments import NestedOptionChain
 from dotenv import load_dotenv
 import numpy as np
 import os
-from models import svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics
+from models import svi_model, slv_model, rfv_model, sabr_model, cvs_model, fit_model, compute_metrics
 from data_generator import DataGenerator
 
 # Load environment variables
@@ -175,7 +175,7 @@ class App:
 
         tk.Label(selection_and_metrics_frame, text="Model:").pack(side=tk.LEFT)
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
-                                        values=["RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
+                                        values=["RFV", "SVI", "SLV", "SABR", "CVS"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
 
         # Add a filter input field
@@ -223,7 +223,7 @@ class App:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Max Bid-Ask Spread.")
             return
         
-        if max_spread > 0.0:
+        if (max_spread > 0.0):
             mask = (y_ask - y_bid) <= max_spread
             x = x[mask]
             y_mid = y_mid[mask]
@@ -252,7 +252,8 @@ class App:
             "SVI": svi_model,
             "SLV": slv_model,
             "RFV": rfv_model,
-            "SABR": sabr_model
+            "SABR": sabr_model,
+            "CVS": cvs_model
         }.get(self.selected_method.get())
 
         params = fit_model(x, y_mid, model)
