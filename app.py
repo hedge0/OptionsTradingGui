@@ -2,13 +2,14 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import numpy as np
-from scipy.optimize import minimize
-from tastytrade import Session, Account
+from tastytrade import Session
 from tastytrade.utils import TastytradeError
 from tastytrade.instruments import NestedOptionChain
 from dotenv import load_dotenv
+import numpy as np
 import os
+from models import svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics
+from data_generator import DataGenerator
 
 # Load environment variables
 load_dotenv()
@@ -29,25 +30,6 @@ def load_config():
     for key, value in config.items():
         if value is None:
             raise ValueError(f"{key} environment variable not set")
-
-class DataGenerator:
-    def __init__(self, at_the_money_vol=0.2, skew=1.5, kurtosis=0.8):
-        self.at_the_money_vol = at_the_money_vol
-        self.skew = skew
-        self.kurtosis = kurtosis
-        self.data = self.generate_smile_data()
-
-    def generate_smile_data(self):
-        x = np.linspace(0.6, 1.4, 80)
-        y_mid = self.at_the_money_vol + self.skew * (x - 1) ** 2 - self.kurtosis * (x - 1) ** 4
-        y_mid += np.random.normal(0, 0.015, size=x.shape)
-        spread_factors = np.random.uniform(0.01, 0.05, size=x.shape)
-        y_bid = np.maximum(y_mid - spread_factors, 0.0)
-        y_ask = np.minimum(y_mid + spread_factors, 1.0)
-        return y_mid, y_bid, y_ask, x
-
-    def update_data(self):
-        self.data = self.generate_smile_data()
 
 def show_login():
     login_window = tk.Tk()
@@ -214,48 +196,6 @@ class App:
 
         tk.Button(selection_and_metrics_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT)
 
-    def svi_model(self, k, params):
-        a, b, rho, m, sigma = params
-        return a + b * (rho * (k - m) + np.sqrt((k - m) ** 2 + sigma ** 2))
-
-    def slv_model(self, k, params):
-        a, b, c, d, e = params
-        return a + b * k + c * k**2 + d * k**3 + e * k**4
-
-    def rfv_model(self, k, params):
-        a, b, c, d, e = params
-        return (a + b*k + c*k**2) / (1 + d*k + e*k**2)
-
-    def sabr_model(self, k, params):
-        alpha, beta, rho, nu, f0 = params
-        return alpha * (1 + beta * k + rho * k**2 + nu * k**3 + f0 * k**4)
-
-    def objective_function(self, params, k, y, model):
-        return np.sum((model(k, params) - y) ** 2)
-
-    def fit_model(self, x, y, model):
-        k = np.log(x)
-        if model == self.svi_model:
-            initial_guess = [0.01, 0.5, -0.3, 0.0, 0.2]
-            bounds = [(0, 1), (0, 1), (-1, 1), (-1, 1), (0.01, 1)]
-        else:
-            initial_guess = [0.2, 0.3, 0.1, 0.2, 0.1]
-            bounds = [(None, None), (None, None), (None, None), (None, None), (None, None)]
-        result = minimize(self.objective_function, initial_guess, args=(k, y, model), method='L-BFGS-B', bounds=bounds)
-        return result.x
-
-    def compute_metrics(self, x, y, model, params):
-        k = np.log(x)
-        y_fit = model(k, params)
-        
-        # Chi-Squared Calculation
-        chi_squared = np.sum((y - y_fit) ** 2)
-        
-        # Average Error (avE5) Calculation
-        avE5 = np.mean(np.abs(y - y_fit)) * 10000
-        
-        return chi_squared, avE5
-
     def setup_plot(self):
         self.ax.set_facecolor('#1c1c1c')
         self.figure.patch.set_facecolor('#1c1c1c')
@@ -305,13 +245,13 @@ class App:
         self.lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
 
         model = {
-            "SVI": self.svi_model,
-            "SLV": self.slv_model,
-            "RFV": self.rfv_model,
-            "SABR": self.sabr_model
+            "SVI": svi_model,
+            "SLV": slv_model,
+            "RFV": rfv_model,
+            "SABR": sabr_model
         }.get(self.selected_method.get())
 
-        params = self.fit_model(x, y_mid, model)
+        params = fit_model(x, y_mid, model)
         interpolated_y = model(np.log(self.fine_x), params)
 
         if hasattr(self, 'fit_line'):
@@ -320,7 +260,7 @@ class App:
             self.fit_line, = self.ax.plot(self.fine_x, interpolated_y, color='green', label="Fit", linewidth=1.5)
         
         # Compute and display metrics
-        chi_squared, avE5 = self.compute_metrics(x, y_mid, model, params)
+        chi_squared, avE5 = compute_metrics(x, y_mid, model, params)
         
         self.metrics_text.config(text=f"χ²: {chi_squared:.4f}    avE5: {avE5:.2f} bps")
 
