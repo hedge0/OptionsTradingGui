@@ -1,3 +1,5 @@
+import numpy as np
+from scipy.optimize import minimize
 import tkinter as tk
 from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
@@ -6,9 +8,8 @@ from tastytrade import Session
 from tastytrade.utils import TastytradeError
 from tastytrade.instruments import NestedOptionChain
 from dotenv import load_dotenv
-import numpy as np
 import os
-from models import svi_model, slv_model, rfv_model, sabr_model, cvs_model, fit_model, compute_metrics
+from models import svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics
 from data_generator import DataGenerator
 
 # Load environment variables
@@ -136,6 +137,7 @@ class App:
         self.data_gen = DataGenerator()
         self.fine_x = np.linspace(0.6, 1.4, 200)
         self.selected_method = tk.StringVar(value="RFV")
+        self.selected_objective = tk.StringVar(value="WLS")
         self.ticker = ticker  # Store the ticker value
 
         style = ttk.Style()
@@ -175,8 +177,13 @@ class App:
 
         tk.Label(selection_and_metrics_frame, text="Model:").pack(side=tk.LEFT)
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
-                                        values=["RFV", "SVI", "SLV", "SABR", "CVS"], state="readonly", style="TCombobox")
+                                        values=["RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(selection_and_metrics_frame, text="Objective Function:").pack(side=tk.LEFT, padx=5)
+        self.objective_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_objective, 
+                                           values=["WLS", "LS", "RE"], state="readonly", style="TCombobox")
+        self.objective_menu.pack(side=tk.LEFT, padx=5)
 
         # Add a filter input field
         tk.Label(selection_and_metrics_frame, text="Max Spread:").pack(side=tk.LEFT, padx=5)
@@ -188,14 +195,14 @@ class App:
         tk.Label(selection_and_metrics_frame, text="Exp. Date:").pack(side=tk.LEFT, padx=5)
         self.exp_date_var = tk.StringVar(value=expiration_dates_list[0])  # Default to the first date
         self.exp_date_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.exp_date_var, 
-                                        values=expiration_dates_list, state="readonly", style="TCombobox")
+                                          values=expiration_dates_list, state="readonly", style="TCombobox")
         self.exp_date_menu.pack(side=tk.LEFT, padx=5)
 
         # Add the Type dropdown menu
         tk.Label(selection_and_metrics_frame, text="Type:").pack(side=tk.LEFT, padx=5)
         self.type_var = tk.StringVar(value="calls")  # Default to "calls"
         self.type_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.type_var, 
-                                    values=["calls", "puts"], state="readonly", style="TCombobox")
+                                      values=["calls", "puts"], state="readonly", style="TCombobox")
         self.type_menu.pack(side=tk.LEFT, padx=5)
 
         tk.Button(selection_and_metrics_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT)
@@ -253,10 +260,11 @@ class App:
             "SLV": slv_model,
             "RFV": rfv_model,
             "SABR": sabr_model,
-            "CVS": cvs_model
         }.get(self.selected_method.get())
 
-        params = fit_model(x, y_mid, model)
+        # Apply the selected objective function
+        params = fit_model(x, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
+
         interpolated_y = model(np.log(self.fine_x), params)
 
         if hasattr(self, 'fit_line'):
