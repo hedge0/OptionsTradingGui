@@ -1,3 +1,5 @@
+import os
+import json
 import numpy as np
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -6,13 +8,10 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tastytrade import Session
 from tastytrade.utils import TastytradeError
 from tastytrade.instruments import NestedOptionChain
-from dotenv import load_dotenv
-import os
 from models import svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics
 from data_generator import DataGenerator
 
-# Load environment variables
-load_dotenv()
+CACHE_FILE = 'credentials_cache.json'
 
 config = {}
 session = None
@@ -21,43 +20,56 @@ expiration_to_strikes_map = {}
 streamer_to_strike_map = {}
 expiration_dates_list = []
 
-def load_config():
+def load_cached_credentials():
     global config
-    config = {
-        "TASTYTRADE_USERNAME": os.getenv('TASTYTRADE_USERNAME'),
-        "TASTYTRADE_PASSWORD": os.getenv('TASTYTRADE_PASSWORD'),
-    }
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, 'r') as file:
+            config = json.load(file)
+    else:
+        config = {}
 
-    for key, value in config.items():
-        if value is None:
-            raise ValueError(f"{key} environment variable not set")
+def save_cached_credentials(username, password):
+    with open(CACHE_FILE, 'w') as file:
+        json.dump({"TASTYTRADE_USERNAME": username, "TASTYTRADE_PASSWORD": password}, file)
 
 def show_login():
     login_window = tk.Tk()
     login_window.title("Login")
-    login_window.geometry("300x200")
+    login_window.geometry("300x250")
 
     tk.Label(login_window, text="Username:").pack(pady=5)
     username_entry = tk.Entry(login_window)
-    username_entry.insert(0, config['TASTYTRADE_USERNAME'])
     username_entry.pack(pady=5)
+
+    if config.get('TASTYTRADE_USERNAME'):
+        username_entry.insert(0, config['TASTYTRADE_USERNAME'])
 
     tk.Label(login_window, text="Password:").pack(pady=5)
     password_entry = tk.Entry(login_window, show="*")
-    password_entry.insert(0, config['TASTYTRADE_PASSWORD'])
     password_entry.pack(pady=5)
+
+    if config.get('TASTYTRADE_PASSWORD'):
+        password_entry.insert(0, config['TASTYTRADE_PASSWORD'])
+
+    remember_var = tk.BooleanVar(value=False)
+    remember_checkbox = tk.Checkbutton(login_window, text="Remember Me", variable=remember_var)
+    remember_checkbox.pack(pady=5)
 
     def check_credentials():
         global session, chain
         username = username_entry.get()
         password = password_entry.get()
+
         try:
             session = Session(login=username, password=password, remember_me=True)
             messagebox.showinfo("Login Success", "Login successful!")
 
+            if remember_var.get():
+                save_cached_credentials(username, password)
+
             for widget in login_window.winfo_children():
                 widget.pack_forget()
-            
+
             tk.Label(login_window, text="Ticker:").pack(pady=5)
             ticker_entry = tk.Entry(login_window)
             ticker_entry.insert(0, "SPY")  # Set default value to "SPY"
@@ -284,5 +296,5 @@ class App:
         self.root.after(10000, self.update_data_and_plot)  # 10 seconds interval
 
 if __name__ == "__main__":
-    load_config()
+    load_cached_credentials()
     show_login()
