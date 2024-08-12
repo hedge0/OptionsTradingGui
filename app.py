@@ -1,5 +1,4 @@
 import os
-import json
 import numpy as np
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -10,27 +9,14 @@ from tastytrade.utils import TastytradeError
 from tastytrade.instruments import NestedOptionChain
 from models import svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics
 from data_generator import DataGenerator
+from credential_manager import load_cached_credentials, save_cached_credentials
 
-CACHE_FILE = 'credentials_cache.json'
-
-config = {}
+config = load_cached_credentials()
 session = None
 chain = None
 expiration_to_strikes_map = {}
 streamer_to_strike_map = {}
 expiration_dates_list = []
-
-def load_cached_credentials():
-    global config
-    if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, 'r') as file:
-            config = json.load(file)
-    else:
-        config = {}
-
-def save_cached_credentials(username, password):
-    with open(CACHE_FILE, 'w') as file:
-        json.dump({"TASTYTRADE_USERNAME": username, "TASTYTRADE_PASSWORD": password}, file)
 
 def show_login():
     login_window = tk.Tk()
@@ -296,5 +282,4 @@ class App:
         self.root.after(10000, self.update_data_and_plot)  # 10 seconds interval
 
 if __name__ == "__main__":
-    load_cached_credentials()
     show_login()
