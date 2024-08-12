@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.optimize import minimize
 import tkinter as tk
 from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
@@ -137,7 +136,7 @@ class App:
         self.data_gen = DataGenerator()
         self.fine_x = np.linspace(0.6, 1.4, 200)
         self.selected_method = tk.StringVar(value="RFV")
-        self.selected_objective = tk.StringVar(value="WLS")
+        self.selected_objective = tk.StringVar(value="WRE")
         self.ticker = ticker  # Store the ticker value
 
         style = ttk.Style()
@@ -182,7 +181,7 @@ class App:
 
         tk.Label(selection_and_metrics_frame, text="Objective Function:").pack(side=tk.LEFT, padx=5)
         self.objective_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_objective, 
-                                           values=["WLS", "LS", "RE"], state="readonly", style="TCombobox")
+                                           values=["WRE", "WLS", "LS", "RE"], state="readonly", style="TCombobox")
         self.objective_menu.pack(side=tk.LEFT, padx=5)
 
         # Add a filter input field

@@ -21,8 +21,8 @@ def sabr_model(k, params):
     alpha, beta, rho, nu, f0 = params
     return alpha * (1 + beta * k + rho * k**2 + nu * k**3 + f0 * k**4)
 
-# Objective Function for WLS, LS, and RE
-def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WLS"):
+# Objective Function for WLS, LS, RE, and WRE
+def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WRE"):
     if method == "WLS":
         # Calculate spreads
         spread = y_ask - y_bid
@@ -41,11 +41,19 @@ def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WLS"):
         # Calculate relative error
         residuals = (model(k, params) - y_mid) / y_mid
         return np.sum(residuals ** 2)
+    elif method == "WRE":
+        # Calculate weighted relative error
+        spread = y_ask - y_bid
+        epsilon = 1e-8
+        weights = 1 / (spread + epsilon)
+        residuals = (model(k, params) - y_mid) / y_mid
+        weighted_residuals = weights * residuals ** 2
+        return np.sum(weighted_residuals)
     else:
-        raise ValueError("Unknown method. Choose 'WLS', 'LS', or 'RE'.")
+        raise ValueError("Unknown method. Choose 'WLS', 'LS', 'RE', or 'WRE'.")
 
 # Model Fitting Function
-def fit_model(x, y_mid, y_bid, y_ask, model, method="WLS"):
+def fit_model(x, y_mid, y_bid, y_ask, model, method="WRE"):
     k = np.log(x)
     if model == svi_model:
         initial_guess = [0.01, 0.5, -0.3, 0.0, 0.2]
