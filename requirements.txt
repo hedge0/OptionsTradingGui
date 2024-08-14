@@ -2,3 +2,4 @@ matplotlib
 tk
 python-dotenv
 tastytrade
+scipy
