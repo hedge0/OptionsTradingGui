@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
+from math import log, sqrt, exp
+from scipy.stats import norm
 
 def svi_model(k, params):
     """
@@ -144,3 +146,91 @@ def compute_metrics(x, y_mid, model, params):
     avE5 = np.mean(np.abs(y_mid - y_fit)) * 10000
     
     return chi_squared, avE5
+
+def barone_adesi_whaley_american_option_price(S, K, T, r, sigma, option_type='calls'):
+    """
+    Barone-Adesi Whaley approximation formula for American option pricing.
+    
+    Args:
+        S: Current stock price.
+        K: Strike price of the option.
+        T: Time to expiration in years.
+        r: Risk-free interest rate.
+        sigma: Implied volatility.
+        option_type: 'calls' or 'puts'.
+    
+    Returns:
+        The calculated option price.
+    """
+    M = 2 * r / sigma**2
+    n = 2 * (r - 0.5 * sigma**2) / sigma**2
+    q2 = (-(n - 1) - sqrt((n - 1)**2 + 4 * M)) / 2
+    
+    d1 = (log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * sqrt(T))
+    d2 = d1 - sigma * sqrt(T)
+    
+    if option_type == 'calls':
+        BAW = S * norm.cdf(d1) - K * exp(-r * T) * norm.cdf(d2)
+        
+        if q2 < 0:
+            return BAW
+        
+        S_critical = K / (1 - 1/q2)
+        
+        if S >= S_critical:
+            return S - K
+        else:
+            A2 = (S_critical - K) * (S_critical**-q2)
+            return BAW + A2 * (S/S_critical)**q2
+    elif option_type == 'puts':
+        BAW = K * exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+        
+        if q2 < 0:
+            return BAW
+        
+        S_critical = K / (1 - 1/q2)
+        
+        if S <= S_critical:
+            return K - S
+        else:
+            A2 = (K - S_critical) * (S_critical**-q2)
+            return BAW + A2 * (S/S_critical)**q2
+    else:
+        raise ValueError("option_type must be 'calls' or 'puts'.")
+
+def calculate_implied_volatility_baw(mid_price, S, K, r, T, option_type='calls', max_iterations=100, tolerance=1e-8):
+    """
+    Calculate implied volatility using the Barone-Adesi Whaley model.
+    
+    Args:
+        mid_price: Observed option price (mid-price).
+        S: Current stock price.
+        K: Strike price of the option.
+        r: Risk-free interest rate.
+        T: Time to expiration in years.
+        option_type: 'calls' or 'puts'.
+        max_iterations: Maximum number of iterations for the bisection method.
+        tolerance: Convergence tolerance.
+    
+    Returns:
+        Implied volatility as a float.
+    """
+    lower_vol = 0.0001
+    upper_vol = 2.0
+    
+    for i in range(max_iterations):
+        mid_vol = (lower_vol + upper_vol) / 2
+        price = barone_adesi_whaley_american_option_price(S, K, T, r, mid_vol, option_type)
+        
+        if abs(price - mid_price) < tolerance:
+            return mid_vol
+        
+        if price > mid_price:
+            upper_vol = mid_vol
+        else:
+            lower_vol = mid_vol
+        
+        if upper_vol - lower_vol < tolerance and upper_vol >= 2.0:
+            upper_vol *= 2.0
+
+    return mid_vol
