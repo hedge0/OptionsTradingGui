@@ -3,3 +3,4 @@ tk
 python-dotenv
 tastytrade
 scipy
+fredapi

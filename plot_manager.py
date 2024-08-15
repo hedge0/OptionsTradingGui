@@ -7,12 +7,13 @@ from models import svi_model, slv_model, rfv_model, sabr_model, fit_model, compu
 from data_generator import DataGenerator
 
 class PlotManager:
-    def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list):
+    def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
         self.root = root
         self.session = session
         self.expiration_to_strikes_map = expiration_to_strikes_map
         self.streamer_to_strike_map = streamer_to_strike_map
         self.expiration_dates_list = expiration_dates_list
+        self.risk_free_rate = risk_free_rate
 
         self.root.title("Implied Volatility Smile Simulation")
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
@@ -22,8 +23,8 @@ class PlotManager:
         self.fine_x = np.linspace(0.6, 1.4, 200)
         self.selected_method = tk.StringVar(value="RFV")
         self.selected_objective = tk.StringVar(value="WRE")
-        self.ticker = ticker  # Store the ticker value
-
+        self.ticker = ticker
+        
         style = ttk.Style()
         style.theme_use('clam')
 
@@ -168,7 +169,7 @@ class PlotManager:
         self.update_plot()
         self.root.after(10000, self.update_data_and_plot)  # 10 seconds interval
 
-def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list):
+def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
     root = tk.Tk()
-    PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list)
+    PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate)
     root.mainloop()
