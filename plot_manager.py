@@ -13,7 +13,7 @@ class PlotManager:
         self.expiration_to_strikes_map = expiration_to_strikes_map
         self.streamer_to_strike_map = streamer_to_strike_map
         self.expiration_dates_list = expiration_dates_list
-        self.risk_free_rate = risk_free_rate
+        self.risk_free_rate = risk_free_rate / 100
 
         self.root.title("Implied Volatility Smile Simulation")
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
