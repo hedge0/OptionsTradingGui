@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from models import svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics
+from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics
 from data_generator import DataGenerator
 
 class PlotManager:
@@ -20,7 +20,6 @@ class PlotManager:
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.data_gen = DataGenerator()
-        self.fine_x = np.linspace(0.6, 1.4, 200)
         self.selected_method = tk.StringVar(value="RFV")
         self.selected_objective = tk.StringVar(value="WRE")
         self.ticker = ticker
@@ -106,7 +105,17 @@ class PlotManager:
         self.ax.set_ylabel("Implied Volatility")
 
     def update_plot(self):
-        y_mid, y_bid, y_ask, x = self.data_gen.data
+        data_dict = self.data_gen.data
+        sorted_data = dict(sorted(data_dict.items()))
+
+        # Extract x, y_bid, y_ask, and y_mid from the dictionary
+        strike_prices = np.array(list(sorted_data.keys()))
+        x = filter_strikes(strike_prices, np.mean(strike_prices))
+        sorted_data = {strike: prices for strike, prices in sorted_data.items() if strike in x}
+
+        y_bid = np.array([prices['bid'] for prices in sorted_data.values()])
+        y_ask = np.array([prices['ask'] for prices in sorted_data.values()])
+        y_mid = np.array([prices['mid'] for prices in sorted_data.values()])
 
         # Apply the bid-ask spread filter if necessary
         try:
@@ -115,7 +124,7 @@ class PlotManager:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Max Bid-Ask Spread.")
             return
         
-        if (max_spread > 0.0):
+        if max_spread > 0.0:
             mask = (y_ask - y_bid) <= max_spread
             x = x[mask]
             y_mid = y_mid[mask]
@@ -147,15 +156,17 @@ class PlotManager:
             "SABR": sabr_model,
         }.get(self.selected_method.get())
 
-        # Apply the selected objective function
+        # Apply the selected objective function and fit the model
         params = fit_model(x, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
 
-        interpolated_y = model(np.log(self.fine_x), params)
+        # Use the boundaries of x for interpolation
+        fine_x = np.linspace(np.min(x), np.max(x), 200)
+        interpolated_y = model(np.log(fine_x), params)
 
         if hasattr(self, 'fit_line'):
-            self.fit_line.set_data(self.fine_x, interpolated_y)
+            self.fit_line.set_data(fine_x, interpolated_y)
         else:
-            self.fit_line, = self.ax.plot(self.fine_x, interpolated_y, color='green', label="Fit", linewidth=1.5)
+            self.fit_line, = self.ax.plot(fine_x, interpolated_y, color='green', label="Fit", linewidth=1.5)
         
         # Compute and display metrics
         chi_squared, avE5 = compute_metrics(x, y_mid, model, params)

@@ -1,4 +1,5 @@
 import numpy as np
+from collections import defaultdict
 
 class DataGenerator:
     """
@@ -10,7 +11,7 @@ class DataGenerator:
         kurtosis (float): The kurtosis of the volatility smile.
         asymmetry (float): The asymmetry of the volatility smile.
         tail_rise (float): The tail rise in the volatility smile.
-        data (tuple): Generated data containing mid prices, bid prices, ask prices, and strikes.
+        data (defaultdict): Generated data containing bid, ask, and mid prices mapped to strikes.
     """
     
     def __init__(self, at_the_money_vol=0.2, skew=1.0, kurtosis=0.6, asymmetry=0.1, tail_rise=0.3):
@@ -36,7 +37,7 @@ class DataGenerator:
         Generate synthetic implied volatility smile data.
 
         Returns:
-            tuple: Containing the mid prices (y_mid), bid prices (y_bid), ask prices (y_ask), and strikes (x).
+            defaultdict: Containing the bid, ask, and mid prices mapped to strikes.
         """
         x = np.linspace(0.6, 1.4, 80)
         
@@ -57,7 +58,16 @@ class DataGenerator:
         y_bid = np.maximum(y_mid - spread_factors, 0.0)
         y_ask = np.minimum(y_mid + spread_factors, 1.0)
         
-        return y_mid, y_bid, y_ask, x
+        quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None})
+        
+        for i, strike in enumerate(x):
+            quote_data[strike] = {
+                "bid": y_bid[i],
+                "ask": y_ask[i],
+                "mid": y_mid[i]
+            }
+        
+        return quote_data
 
     def update_data(self):
         """
