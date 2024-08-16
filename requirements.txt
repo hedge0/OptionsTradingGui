@@ -4,3 +4,4 @@ python-dotenv
 tastytrade
 scipy
 fredapi
+numba

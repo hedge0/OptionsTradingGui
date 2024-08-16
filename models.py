@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 from math import log, sqrt, exp
-from scipy.stats import norm
+from numba import njit
 
 def svi_model(k, params):
     """
@@ -147,6 +147,40 @@ def compute_metrics(x, y_mid, model, params):
     
     return chi_squared, avE5
 
+@njit
+def erf(x):
+    """
+    Compute the error function (erf) using a numerical approximation.
+
+    Args:
+        x (float): The value for which to compute the error function.
+
+    Returns:
+        float: The computed error function value.
+    """
+    a1, a2, a3, a4, a5 = 0.254829592, -0.284496736, 1.421413741, -1.453152027, 1.061405429
+    p = 0.3275911
+    sign = 1 if x >= 0 else -1
+    x = abs(x)
+    t = 1.0 / (1.0 + p * x)
+    y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * exp(-x * x)
+
+    return sign * y
+
+@njit
+def normal_cdf(x):
+    """
+    Compute the cumulative distribution function (CDF) of the standard normal distribution.
+
+    Args:
+        x (float): The value for which to compute the CDF.
+
+    Returns:
+        float: The computed CDF value.
+    """
+    return 0.5 * (1.0 + erf(x / sqrt(2.0)))
+
+@njit
 def barone_adesi_whaley_american_option_price(S, K, T, r, sigma, option_type='calls'):
     """
     Barone-Adesi Whaley approximation formula for American option pricing.
@@ -170,26 +204,20 @@ def barone_adesi_whaley_american_option_price(S, K, T, r, sigma, option_type='ca
     d2 = d1 - sigma * sqrt(T)
     
     if option_type == 'calls':
-        BAW = S * norm.cdf(d1) - K * exp(-r * T) * norm.cdf(d2)
-        
+        BAW = S * normal_cdf(d1) - K * exp(-r * T) * normal_cdf(d2)
         if q2 < 0:
             return BAW
-        
         S_critical = K / (1 - 1/q2)
-        
         if S >= S_critical:
             return S - K
         else:
             A2 = (S_critical - K) * (S_critical**-q2)
             return BAW + A2 * (S/S_critical)**q2
     elif option_type == 'puts':
-        BAW = K * exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
-        
+        BAW = K * exp(-r * T) * normal_cdf(-d2) - S * normal_cdf(-d1)
         if q2 < 0:
             return BAW
-        
         S_critical = K / (1 - 1/q2)
-        
         if S <= S_critical:
             return K - S
         else:
