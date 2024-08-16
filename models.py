@@ -234,3 +234,25 @@ def calculate_implied_volatility_baw(mid_price, S, K, r, T, option_type='calls',
             upper_vol *= 2.0
 
     return mid_vol
+
+def filter_strikes(x, S, num_stdev=1.25, two_sigma_move=False):
+    """
+    Filter strike prices around the underlying asset's price.
+
+    Args:
+        x: Array of strike prices.
+        S: Current underlying price.
+        num_stdev: Number of standard deviations for filtering (default 1.25).
+        two_sigma_move: Adjust upper bound for a 2-sigma move (default False).
+
+    Returns:
+        Filtered array of strike prices within the specified range.
+    """
+    stdev = np.std(x)
+    lower_bound = S - num_stdev * stdev
+    upper_bound = S + num_stdev * stdev
+
+    if two_sigma_move:
+        upper_bound = S + 2 * stdev
+
+    return x[(x >= lower_bound) & (x <= upper_bound)]
