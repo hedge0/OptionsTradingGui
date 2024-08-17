@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.optimize import minimize
-from math import log, sqrt, exp
+from math import sqrt, exp
 from numba import njit
 
 def svi_model(k, params):
