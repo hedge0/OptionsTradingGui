@@ -75,6 +75,12 @@ class PlotManager:
         self.spread_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.spread_filter_var, width=10)
         self.spread_filter_entry.pack(side=tk.LEFT, padx=5)
 
+        # Add the Strike Filter input field
+        tk.Label(selection_and_metrics_frame, text="Strike Filter:").pack(side=tk.LEFT, padx=5)
+        self.strike_filter_var = tk.StringVar(value="0.0")
+        self.strike_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.strike_filter_var, width=10)
+        self.strike_filter_entry.pack(side=tk.LEFT, padx=5)
+
         # Add the Exp. Date dropdown menu
         tk.Label(selection_and_metrics_frame, text="Exp. Date:").pack(side=tk.LEFT, padx=5)
         self.exp_date_var = tk.StringVar(value=self.expiration_dates_list[0])  # Default to the first date
@@ -108,9 +114,24 @@ class PlotManager:
         data_dict = self.data_gen.data
         sorted_data = dict(sorted(data_dict.items()))
 
+        # Get the Strike Filter value and ensure it's a float 0.0 or above
+        try:
+            strike_filter_value = float(self.strike_filter_var.get())
+            if strike_filter_value < 0.0:
+                raise ValueError("Strike Filter must be 0.0 or above.")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Strike Filter (0.0 or above).")
+            return
+
         # Extract x, y_bid, y_ask, and y_mid from the dictionary
         strike_prices = np.array(list(sorted_data.keys()))
-        x = filter_strikes(strike_prices, np.mean(strike_prices))
+
+        # Apply the strike filter only if strike_filter_value is greater than 0.0
+        if strike_filter_value > 0.0:
+            x = filter_strikes(strike_prices, np.mean(strike_prices), num_stdev=strike_filter_value)
+        else:
+            x = strike_prices
+            
         sorted_data = {strike: prices for strike, prices in sorted_data.items() if strike in x}
 
         y_bid = np.array([prices['bid'] for prices in sorted_data.values()])
@@ -158,8 +179,6 @@ class PlotManager:
 
         # Apply the selected objective function and fit the model
         params = fit_model(x, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
-
-        # Use the boundaries of x for interpolation
         fine_x = np.linspace(np.min(x), np.max(x), 200)
         interpolated_y = model(np.log(fine_x), params)
 
@@ -170,7 +189,6 @@ class PlotManager:
         
         # Compute and display metrics
         chi_squared, avE5 = compute_metrics(x, y_mid, model, params)
-        
         self.metrics_text.config(text=f"χ²: {chi_squared:.4f}    avE5: {avE5:.2f} bps")
 
         self.canvas.draw()
