@@ -140,9 +140,7 @@ def compute_metrics(x, y_mid, model, params):
     """
     k = np.log(x)
     y_fit = model(k, params)
-    
     chi_squared = np.sum((y_mid - y_fit) ** 2)
-    
     avE5 = np.mean(np.abs(y_mid - y_fit)) * 10000
     
     return chi_squared, avE5
