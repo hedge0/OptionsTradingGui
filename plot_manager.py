@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics
 from data_generator import DataGenerator
+from sklearn.preprocessing import MinMaxScaler
 
 class PlotManager:
     def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
@@ -189,10 +190,19 @@ class PlotManager:
             for line in self.lines:
                 line.remove()
 
-        self.bids = self.ax.scatter(x, y_bid, color='red', s=10, label="Bid")
-        self.asks = self.ax.scatter(x, y_ask, color='red', s=10, label="Ask")
-        self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
-        self.lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
+        # ADD THE NORMALIZATION HERE
+        scaler = MinMaxScaler()
+
+        # Normalize x to [0, 1]
+        x_normalized = scaler.fit_transform(x.reshape(-1, 1)).flatten()
+
+        # Adjust the range to [1, 2] by adding 1
+        x_normalized = x_normalized + 1
+
+        self.bids = self.ax.scatter(x_normalized, y_bid, color='red', s=10, label="Bid")
+        self.asks = self.ax.scatter(x_normalized, y_ask, color='red', s=10, label="Ask")
+        self.midpoints = self.ax.scatter(x_normalized, y_mid, color='red', s=20, label="Midpoint")
+        self.lines = [self.ax.plot([x_normalized[i], x_normalized[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
 
         model = {
             "SVI": svi_model,
@@ -202,8 +212,8 @@ class PlotManager:
         }.get(self.selected_method.get())
 
         # Apply the selected objective function and fit the model
-        params = fit_model(x, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
-        fine_x = np.linspace(np.min(x), np.max(x), 200)
+        params = fit_model(x_normalized, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
+        fine_x = np.linspace(np.min(x_normalized), np.max(x_normalized), 200)
         interpolated_y = model(np.log(fine_x), params)
 
         if hasattr(self, 'fit_line'):
@@ -212,10 +222,11 @@ class PlotManager:
             self.fit_line, = self.ax.plot(fine_x, interpolated_y, color='green', label="Fit", linewidth=1.5)
         
         # Compute and display metrics
-        chi_squared, avE5 = compute_metrics(x, y_mid, model, params)
+        chi_squared, avE5 = compute_metrics(x_normalized, y_mid, model, params)
         self.metrics_text.config(text=f"χ²: {chi_squared:.4f}    avE5: {avE5:.2f} bps")
 
         self.canvas.draw()
+
 
     def update_data_and_plot(self):
         self.data_gen.update_data()
