@@ -99,6 +99,39 @@ def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WRE"):
     else:
         raise ValueError("Unknown method. Choose 'WLS', 'LS', 'RE', or 'WRE'.")
 
+def generate_initial_guess(y_mid, y_bid, y_ask, model_name):
+    """
+    Generate an initial guess for the model parameters based on the input data.
+
+    Args:
+        y_mid (array-like): Mid prices of the options.
+        y_bid (array-like): Bid prices of the options.
+        y_ask (array-like): Ask prices of the options.
+        model_name (str): Name of the model being fitted.
+
+    Returns:
+        list: Initial guess for the model parameters.
+    """
+    mid_range = np.ptp(y_mid)  # Range of mid prices
+    avg_mid = np.mean(y_mid)  # Mean of mid prices
+
+    if model_name == "svi_model":
+        return [
+            avg_mid * 0.01,  # a small fraction of the mean of mid prices
+            avg_mid * 0.5,   # b half of the mean of mid prices
+            -0.3,            # rho kept the same as before
+            0.0,             # m kept the same as before
+            mid_range * 0.2  # sigma proportional to the range of mid prices
+        ]
+    else:
+        return [
+            avg_mid * 0.2,   # Parameter a as a fraction of avg mid prices
+            avg_mid * 0.3,   # Parameter b as a fraction of avg mid prices
+            avg_mid * 0.1,   # Parameter c as a fraction of avg mid prices
+            avg_mid * 0.2,   # Parameter d as a fraction of avg mid prices
+            avg_mid * 0.1    # Parameter e as a fraction of avg mid prices
+        ]
+
 def fit_model(x, y_mid, y_bid, y_ask, model, method="WRE"):
     """
     Fit the chosen volatility model to the market data.
@@ -115,13 +148,17 @@ def fit_model(x, y_mid, y_bid, y_ask, model, method="WRE"):
         list: The fitted model parameters.
     """
     k = np.log(x)
+    model_name = model.__name__
+
+    # Generate an initial guess based on the input data
+    initial_guess = generate_initial_guess(y_mid, y_bid, y_ask, model_name)
+
+    # Keep the original bounds as they are
     if model == svi_model:
-        initial_guess = [0.01, 0.5, -0.3, 0.0, 0.2]
         bounds = [(0, 1), (0, 1), (-1, 1), (-1, 1), (0.01, 1)]
     else:
-        initial_guess = [0.2, 0.3, 0.1, 0.2, 0.1]
         bounds = [(None, None), (None, None), (None, None), (None, None), (None, None)]
-    
+
     result = minimize(objective_function, initial_guess, args=(k, y_mid, y_bid, y_ask, model, method), method='L-BFGS-B', bounds=bounds)
     return result.x
 
