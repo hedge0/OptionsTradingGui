@@ -5,3 +5,4 @@ tastytrade
 scipy
 fredapi
 numba
+sklearn

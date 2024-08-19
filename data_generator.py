@@ -39,19 +39,22 @@ class DataGenerator:
         Returns:
             defaultdict: Containing the bid, ask, and mid prices mapped to strikes.
         """
-        x = np.linspace(0.6, 1.4, 80)
+        x = np.linspace(85, 280, 49)  # Adjust the strike range to 85-280
+        
+        # Adjust the formula to ensure a reasonable volatility smile across the new range
+        x_norm = (x - np.mean(x)) / (np.max(x) - np.min(x))  # Normalize x for the formula
         
         y_mid = (self.at_the_money_vol + 
-                 self.skew * (x - 1) ** 2 - 
-                 self.kurtosis * (x - 1) ** 4 +
-                 self.asymmetry * (x - 1) +
-                 self.tail_rise * (x - 1) ** 3)
+                 self.skew * (x_norm) ** 2 - 
+                 self.kurtosis * (x_norm) ** 4 +
+                 self.asymmetry * (x_norm) +
+                 self.tail_rise * (x_norm) ** 3)
         
         y_mid += np.random.normal(0, 0.01, size=x.shape)
         
         spread_factors = np.random.uniform(0.005, 0.03, size=x.shape)
         
-        tail_end_mask = x > 1.2
+        tail_end_mask = x > 200  # Adjust the threshold for tail ends
         random_wider_spreads = np.random.rand(len(x)) > 0.8
         spread_factors += tail_end_mask * random_wider_spreads * np.random.uniform(0.03, 0.07, size=x.shape)
         
