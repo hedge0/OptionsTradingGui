@@ -190,6 +190,11 @@ class PlotManager:
             for line in self.lines:
                 line.remove()
 
+
+        print(x)
+        print(y_mid)
+
+
         # ADD THE NORMALIZATION HERE
         scaler = MinMaxScaler()
 
@@ -231,7 +236,7 @@ class PlotManager:
     def update_data_and_plot(self):
         self.data_gen.update_data()
         self.update_plot()
-        self.root.after(10000, self.update_data_and_plot)  # 10 seconds interval
+        self.root.after(1000000, self.update_data_and_plot)  # 10 seconds interval
 
     def on_mouse_move(self, event):
         if event.inaxes:
