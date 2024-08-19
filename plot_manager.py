@@ -193,7 +193,7 @@ class PlotManager:
         # normalize X values here
         scaler = MinMaxScaler()
         x_normalized = scaler.fit_transform(x.reshape(-1, 1)).flatten()
-        x_normalized = x_normalized + 1
+        x_normalized = x_normalized + 0.5
 
         model = {
             "SVI": svi_model,
@@ -205,7 +205,6 @@ class PlotManager:
         # Apply the selected objective function and fit the model
         params = fit_model(x_normalized, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
         fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 200)
-        fine_x = np.linspace(np.min(x), np.max(x), 200)
         interpolated_y = model(np.log(fine_x_normalized), params)
         chi_squared, avE5 = compute_metrics(x_normalized, y_mid, model, params)
 
@@ -215,6 +214,8 @@ class PlotManager:
         self.asks = self.ax.scatter(x, y_ask, color='red', s=10, label="Ask")
         self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
         self.lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
+
+        fine_x = np.linspace(np.min(x), np.max(x), 200)
 
         if hasattr(self, 'fit_line'):
             self.fit_line.set_data(fine_x, interpolated_y)
@@ -227,7 +228,7 @@ class PlotManager:
     def update_data_and_plot(self):
         self.data_gen.update_data()
         self.update_plot()
-        self.root.after(1000000, self.update_data_and_plot)  # 10 seconds interval
+        self.root.after(10000, self.update_data_and_plot)  # 10 seconds interval
 
     def on_mouse_move(self, event):
         if event.inaxes:
