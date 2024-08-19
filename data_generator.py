@@ -39,7 +39,7 @@ class DataGenerator:
         Returns:
             defaultdict: Containing the bid, ask, and mid prices mapped to strikes.
         """
-        x = np.linspace(85, 280, 49)  # Adjust the strike range to 85-280
+        x = np.linspace(85, 285, 41)  # Adjust the strike range to 85-285
         
         # Adjust the formula to ensure a reasonable volatility smile across the new range
         x_norm = (x - np.mean(x)) / (np.max(x) - np.min(x))  # Normalize x for the formula
