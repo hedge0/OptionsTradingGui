@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics, calculate_implied_volatility_lr
+from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics, calculate_implied_volatility_lr, calculate_implied_volatility_baw
 from data_generator import DataGenerator
 from sklearn.preprocessing import MinMaxScaler
 
@@ -24,8 +24,8 @@ class PlotManager:
         self.selected_method = tk.StringVar(value="RFV")
         self.selected_objective = tk.StringVar(value="WRE")
         self.ticker = ticker
-
-        self.press_event = None  # To store the initial press event for dragging
+        self.selected_pricing_model = tk.StringVar(value="Leisen-Reimer")
+        self.press_event = None
 
         style = ttk.Style()
         style.theme_use('clam')
@@ -94,6 +94,12 @@ class PlotManager:
                                         values=["WRE", "WLS", "LS", "RE"], state="readonly", style="TCombobox")
         self.objective_menu.pack(side=tk.LEFT, padx=5)
 
+        # Add the Pricing Model dropdown menu (moved between Objective Function and Max Spread)
+        tk.Label(selection_and_metrics_frame, text="Pricing Model:").pack(side=tk.LEFT, padx=5)
+        self.pricing_model_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_pricing_model,
+                                            values=["Leisen-Reimer", "Barone-Adesi Whaley"], state="readonly", style="TCombobox")
+        self.pricing_model_menu.pack(side=tk.LEFT, padx=5)
+
         # Add a filter input field
         tk.Label(selection_and_metrics_frame, text="Max Spread:").pack(side=tk.LEFT, padx=5)
         self.spread_filter_var = tk.StringVar(value="0.0")
@@ -144,10 +150,15 @@ class PlotManager:
         T = 0.030540532315417302
         r = self.risk_free_rate
 
-        # Process original sorted_data_lr (calculate IVs for bid, ask, and mid prices using LR)
+        # Process original sorted_data_lr (calculate IVs for bid, ask, and mid prices using the selected pricing model)
         for strike, prices in sorted_data.items():
+            if self.selected_pricing_model.get() == "Leisen-Reimer":
+                pricing_model_function = calculate_implied_volatility_lr
+            else:
+                pricing_model_function = calculate_implied_volatility_baw
+
             sorted_data[strike] = {
-                price_type: calculate_implied_volatility_lr(price, S, strike, r, T, option_type='calls')
+                price_type: pricing_model_function(price, S, strike, r, T, option_type=self.type_var.get())
                 for price_type, price in prices.items()
             }
 
@@ -182,7 +193,7 @@ class PlotManager:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Max Bid-Ask Spread.")
             return
         
-        if max_spread > 0.0:
+        if (max_spread > 0.0):
             mask = (y_ask - y_bid) <= max_spread
             x = x[mask]
             y_mid = y_mid[mask]
@@ -202,7 +213,7 @@ class PlotManager:
             for line in self.lines:
                 line.remove()
 
-        # normalize X values here
+        # Normalize X values here
         scaler = MinMaxScaler()
         x_normalized = scaler.fit_transform(x.reshape(-1, 1)).flatten()
         x_normalized = x_normalized + 0.5
