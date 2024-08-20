@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics
+from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics, calculate_implied_volatility_lr
 from data_generator import DataGenerator
 from sklearn.preprocessing import MinMaxScaler
 
@@ -139,6 +139,18 @@ class PlotManager:
         data_dict = self.data_gen.data
         sorted_data = dict(sorted(data_dict.items()))
 
+        # Test data
+        S = 176.94
+        T = 0.030540532315417302
+        r = self.risk_free_rate
+
+        # Process original sorted_data_lr (calculate IVs for bid, ask, and mid prices using LR)
+        for strike, prices in sorted_data.items():
+            sorted_data[strike] = {
+                price_type: calculate_implied_volatility_lr(price, S, strike, r, T, option_type='calls')
+                for price_type, price in prices.items()
+            }
+
         # Get the Strike Filter value and ensure it's a float 0.0 or above
         try:
             strike_filter_value = float(self.strike_filter_var.get())
@@ -223,7 +235,6 @@ class PlotManager:
             self.fit_line, = self.ax.plot(fine_x, interpolated_y, color='green', label="Fit", linewidth=1.5)
 
         self.canvas.draw()
-
 
     def update_data_and_plot(self):
         self.data_gen.update_data()
