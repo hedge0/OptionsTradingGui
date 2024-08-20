@@ -46,41 +46,37 @@ class PlotManager:
         self.update_plot()
         self.update_data_and_plot()
 
-        # Connect the scroll wheel for zooming
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
-
-        # Connect the motion event to update coordinates
         self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
-
-        # Connect mouse press and release events for dragging
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('button_release_event', self.on_release)
+
+        self.precompile_numba_functions()
+
+    def precompile_numba_functions(self):
+        """Call numba-optimized functions with dummy data to precompile them."""
+        calculate_implied_volatility_lr(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
+        calculate_implied_volatility_baw(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
 
     def create_dropdown_and_button(self):
         dropdown_frame = tk.Frame(self.root)
         dropdown_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
 
-        # Frame for the coordinates and metrics labels (left-aligned)
         left_frame = tk.Frame(dropdown_frame)
         left_frame.pack(side=tk.LEFT, anchor=tk.W)
 
-        # Label to display the coordinates with a larger gap between X and Y
         self.coord_label = tk.Label(left_frame, text="X: N/A    Y: N/A", fg='black', bg=dropdown_frame.cget('background'))
         self.coord_label.pack(side=tk.LEFT, padx=5)
 
-        # Adjusted metrics label with a larger gap between coordinates and metrics
         self.metrics_text = tk.Label(left_frame, text="χ²: N/A    avE5: N/A bps", fg='black', bg=dropdown_frame.cget('background'))
         self.metrics_text.pack(side=tk.LEFT, padx=10)
 
-        # Frame for the rest of the controls (right-aligned)
         right_frame = tk.Frame(dropdown_frame)
         right_frame.pack(side=tk.RIGHT, anchor=tk.E)
 
-        # Metrics display frame (moved to the right)
         metrics_frame = tk.Frame(right_frame)
         metrics_frame.pack(side=tk.LEFT, padx=5)
 
-        # Create a frame for the model selection and metrics
         selection_and_metrics_frame = tk.Frame(right_frame)
         selection_and_metrics_frame.pack(side=tk.LEFT)
 
@@ -94,34 +90,29 @@ class PlotManager:
                                         values=["WRE", "WLS", "LS", "RE"], state="readonly", style="TCombobox")
         self.objective_menu.pack(side=tk.LEFT, padx=5)
 
-        # Add the Pricing Model dropdown menu (moved between Objective Function and Max Spread)
         tk.Label(selection_and_metrics_frame, text="Pricing Model:").pack(side=tk.LEFT, padx=5)
         self.pricing_model_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_pricing_model,
                                             values=["Leisen-Reimer", "Barone-Adesi Whaley"], state="readonly", style="TCombobox")
         self.pricing_model_menu.pack(side=tk.LEFT, padx=5)
 
-        # Add a filter input field
         tk.Label(selection_and_metrics_frame, text="Max Spread:").pack(side=tk.LEFT, padx=5)
         self.spread_filter_var = tk.StringVar(value="0.0")
         self.spread_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.spread_filter_var, width=10)
         self.spread_filter_entry.pack(side=tk.LEFT, padx=5)
 
-        # Add the Strike Filter input field
         tk.Label(selection_and_metrics_frame, text="Strike Filter:").pack(side=tk.LEFT, padx=5)
         self.strike_filter_var = tk.StringVar(value="0.0")
         self.strike_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.strike_filter_var, width=10)
         self.strike_filter_entry.pack(side=tk.LEFT, padx=5)
 
-        # Add the Exp. Date dropdown menu
         tk.Label(selection_and_metrics_frame, text="Exp. Date:").pack(side=tk.LEFT, padx=5)
-        self.exp_date_var = tk.StringVar(value=self.expiration_dates_list[0])  # Default to the first date
+        self.exp_date_var = tk.StringVar(value=self.expiration_dates_list[0])
         self.exp_date_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.exp_date_var, 
                                         values=self.expiration_dates_list, state="readonly", style="TCombobox")
         self.exp_date_menu.pack(side=tk.LEFT, padx=5)
 
-        # Add the Type dropdown menu
         tk.Label(selection_and_metrics_frame, text="Type:").pack(side=tk.LEFT, padx=5)
-        self.type_var = tk.StringVar(value="calls")  # Default to "calls"
+        self.type_var = tk.StringVar(value="calls")
         self.type_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.type_var, 
                                     values=["calls", "puts"], state="readonly", style="TCombobox")
         self.type_menu.pack(side=tk.LEFT, padx=5)
@@ -145,7 +136,6 @@ class PlotManager:
         data_dict = self.data_gen.data
         sorted_data = dict(sorted(data_dict.items()))
 
-        # Test data
         S = 176.94
         T = 0.030540532315417302
         r = self.risk_free_rate
@@ -254,13 +244,11 @@ class PlotManager:
 
     def on_mouse_move(self, event):
         if event.inaxes:
-            # Ensure the event.xdata and event.ydata are within bounds
             if event.xdata is not None and event.ydata is not None:
                 x_coord = f"{event.xdata:.2f}"
                 y_coord = f"{event.ydata:.4f}"
                 self.coord_label.config(text=f"X: {x_coord}    Y: {y_coord}")
 
-            # If dragging, update the view limits
             if self.press_event is not None:
                 dx = event.xdata - self.press_event.xdata
                 dy = event.ydata - self.press_event.ydata
@@ -272,17 +260,13 @@ class PlotManager:
 
     def on_scroll(self, event):
         """Zoom in/out with the scroll wheel."""
-        # Check if the event's xdata and ydata are not None
         if event.xdata is None or event.ydata is None:
-            return  # Exit the function if the event occurs outside the axes
+            return
 
         base_scale = 1.2
-
-        # Get the current x and y limits
         cur_xlim = self.ax.get_xlim()
         cur_ylim = self.ax.get_ylim()
 
-        # Calculate the scaling factor
         if event.button == 'up':
             scale_factor = 1 / base_scale
         elif event.button == 'down':
@@ -290,7 +274,6 @@ class PlotManager:
         else:
             scale_factor = 1
 
-        # Calculate the new limits
         new_xlim = [event.xdata - (event.xdata - cur_xlim[0]) * scale_factor,
                     event.xdata + (cur_xlim[1] - event.xdata) * scale_factor]
         new_ylim = [event.ydata - (event.ydata - cur_ylim[0]) * scale_factor,
