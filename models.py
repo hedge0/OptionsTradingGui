@@ -59,6 +59,21 @@ def sabr_model(k, params):
     alpha, beta, rho, nu, f0 = params
     return alpha * (1 + beta * k + rho * k**2 + nu * k**3 + f0 * k**4)
 
+# Define Bergomi Model
+def bergomi_model(k, params):
+    a, b, c, d = params
+    return a + b * k + c * k**2 + d * np.sqrt(np.abs(k))
+
+def hybrid_dfv_bergomi_model(k, params):
+    a1, b1, c1, d1, e1, a2, b2, c2, d2, switch_point = params
+    
+    dfv_value = (a1 + b1*k + c1*k**2) / (1 + d1*k + e1*k**2)
+    bergomi_value = a2 + b2 * k + c2 * k**2 + d2 * np.sqrt(np.abs(k))
+    
+    weight = 1 / (1 + np.exp(-10 * (k - switch_point)))  # Sigmoid for smooth transition
+    
+    return (1 - weight) * dfv_value + weight * bergomi_value
+
 def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WRE"):
     """
     Objective function to minimize during model fitting.
@@ -118,6 +133,10 @@ def fit_model(x, y_mid, y_bid, y_ask, model, method="WRE"):
     if model == svi_model:
         initial_guess = [0.01, 0.5, -0.3, 0.0, 0.2]
         bounds = [(0, 1), (0, 1), (-1, 1), (-1, 1), (0.01, 1)]
+    elif model == hybrid_dfv_bergomi_model:
+        initial_guess = [0.2, 0.3, 0.1, 0.2, 0.1, 0.01, 0.5, -0.3, 0.2, 0.0]
+        bounds = [(None, None), (None, None), (None, None), (None, None), (None, None), 
+                  (None, None), (None, None), (None, None), (None, None), (None, None)]
     else:
         initial_guess = [0.2, 0.3, 0.1, 0.2, 0.1]
         bounds = [(None, None), (None, None), (None, None), (None, None), (None, None)]

@@ -1,11 +1,11 @@
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 import tkinter as tk
 from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics, calculate_implied_volatility_lr, calculate_implied_volatility_baw
 from data_generator import DataGenerator
-from sklearn.preprocessing import MinMaxScaler
 
 class PlotManager:
     def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
@@ -15,14 +15,14 @@ class PlotManager:
         self.streamer_to_strike_map = streamer_to_strike_map
         self.expiration_dates_list = expiration_dates_list
         self.risk_free_rate = risk_free_rate / 100
-        
+
         self.root.title("Implied Volatility Smile Simulation")
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.data_gen = DataGenerator()
         self.selected_method = tk.StringVar(value="RFV")
-        self.selected_objective = tk.StringVar(value="WRE")
+        self.selected_objective = tk.StringVar(value="WLS")
         self.ticker = ticker
         self.selected_pricing_model = tk.StringVar(value="Leisen-Reimer")
         self.press_event = None
@@ -84,7 +84,7 @@ class PlotManager:
 
         tk.Label(selection_and_metrics_frame, text="Objective Function:").pack(side=tk.LEFT, padx=5)
         self.objective_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_objective, 
-                                        values=["WRE", "WLS", "LS", "RE"], state="readonly", style="TCombobox")
+                                        values=["WLS", "WRE", "LS", "RE"], state="readonly", style="TCombobox")
         self.objective_menu.pack(side=tk.LEFT, padx=5)
 
         tk.Label(selection_and_metrics_frame, text="Pricing Model:").pack(side=tk.LEFT, padx=5)
@@ -101,6 +101,11 @@ class PlotManager:
         self.strike_filter_var = tk.StringVar(value="0.0")
         self.strike_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.strike_filter_var, width=10)
         self.strike_filter_entry.pack(side=tk.LEFT, padx=5)
+
+        # Add the Liquidity Filter checkbox
+        self.liquidity_filter_var = tk.BooleanVar(value=True)  # Checked by default
+        self.liquidity_filter_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Liquidity Filter", variable=self.liquidity_filter_var)
+        self.liquidity_filter_checkbox.pack(side=tk.LEFT, padx=5)
 
         tk.Label(selection_and_metrics_frame, text="Exp. Date:").pack(side=tk.LEFT, padx=5)
         self.exp_date_var = tk.StringVar(value=self.expiration_dates_list[0])
@@ -132,6 +137,9 @@ class PlotManager:
     def update_plot(self):
         data_dict = self.data_gen.data
         sorted_data = dict(sorted(data_dict.items()))
+
+        if self.liquidity_filter_var.get():
+            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0}
 
         S = 176.94
         T = 0.030540532315417302
