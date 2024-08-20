@@ -15,7 +15,7 @@ class PlotManager:
         self.streamer_to_strike_map = streamer_to_strike_map
         self.expiration_dates_list = expiration_dates_list
         self.risk_free_rate = risk_free_rate / 100
-
+        
         self.root.title("Implied Volatility Smile Simulation")
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
@@ -29,7 +29,6 @@ class PlotManager:
 
         style = ttk.Style()
         style.theme_use('clam')
-
         style.configure("TCombobox",
                         fieldbackground="white", background="white",
                         selectbackground="white", selectforeground="black")
@@ -45,12 +44,10 @@ class PlotManager:
         self.setup_plot()
         self.update_plot()
         self.update_data_and_plot()
-
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
         self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('button_release_event', self.on_release)
-
         self.precompile_numba_functions()
 
     def precompile_numba_functions(self):
