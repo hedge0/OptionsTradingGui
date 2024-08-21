@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tastytrade import DXLinkStreamer
 from tastytrade.dxfeed import EventType
-from data_generator import DataGenerator
 from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, rbf_model, fit_model, compute_metrics, calculate_implied_volatility_lr, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price, leisen_reimer_tree
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
@@ -28,7 +27,6 @@ class PlotManager:
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        self.data_gen = DataGenerator()
         self.selected_method = tk.StringVar(value="RBF")
         self.selected_objective = tk.StringVar(value="WLS")
         self.ticker = ticker
