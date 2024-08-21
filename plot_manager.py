@@ -22,7 +22,7 @@ class PlotManager:
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.data_gen = DataGenerator()
-        self.selected_method = tk.StringVar(value="RFV")
+        self.selected_method = tk.StringVar(value="RBF")
         self.selected_objective = tk.StringVar(value="WLS")
         self.ticker = ticker
         self.selected_pricing_model = tk.StringVar(value="Leisen-Reimer")
@@ -83,7 +83,7 @@ class PlotManager:
         self.fit_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Fit:", variable=self.fit_var)
         self.fit_checkbox.pack(side=tk.LEFT, padx=5)
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
-                                        values=["RFV", "SVI", "SLV", "SABR", "RBF"], state="readonly", style="TCombobox")
+                                        values=["RBF", "RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
 
         tk.Label(selection_and_metrics_frame, text="Obj. Function:").pack(side=tk.LEFT, padx=5)
