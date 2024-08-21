@@ -119,7 +119,16 @@ class PlotManager:
                                     values=["calls", "puts"], state="readonly", style="TCombobox")
         self.type_menu.pack(side=tk.LEFT, padx=5)
 
-        tk.Button(selection_and_metrics_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT)
+        # Add Bid and Ask checkboxes
+        self.bid_var = tk.BooleanVar(value=True)  # Checked by default
+        self.bid_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Bid", variable=self.bid_var)
+        self.bid_checkbox.pack(side=tk.LEFT, padx=5)
+
+        self.ask_var = tk.BooleanVar(value=True)  # Checked by default
+        self.ask_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Ask", variable=self.ask_var)
+        self.ask_checkbox.pack(side=tk.LEFT, padx=5)
+
+        tk.Button(selection_and_metrics_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT, padx=5)
 
     def setup_plot(self):
         self.ax.set_facecolor('#1c1c1c')
@@ -201,11 +210,17 @@ class PlotManager:
             return
 
         # Clear previous scatter plots if they exist
-        if hasattr(self, 'midpoints'):
+        if hasattr(self, 'midpoints') and self.midpoints:
             self.midpoints.remove()
+        if hasattr(self, 'bids') and self.bids:
             self.bids.remove()
+        if hasattr(self, 'asks') and self.asks:
             self.asks.remove()
-            for line in self.lines:
+        if hasattr(self, 'bid_lines'):
+            for line in self.bid_lines:
+                line.remove()
+        if hasattr(self, 'ask_lines'):
+            for line in self.ask_lines:
                 line.remove()
 
         # Normalize X values here
@@ -228,10 +243,21 @@ class PlotManager:
 
         # Apply results to plot
         self.metrics_text.config(text=f"χ²: {chi_squared:.4f}    avE5: {avE5:.2f} bps")
-        self.bids = self.ax.scatter(x, y_bid, color='red', s=10, label="Bid")
-        self.asks = self.ax.scatter(x, y_ask, color='red', s=10, label="Ask")
         self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
-        self.lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
+
+        if self.bid_var.get():
+            self.bids = self.ax.scatter(x, y_bid, color='red', s=10, label="Bid")
+            self.bid_lines = [self.ax.plot([x[i], x[i]], [y_bid[i], y_mid[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
+        else:
+            self.bids = None
+            self.bid_lines = []
+
+        if self.ask_var.get():
+            self.asks = self.ax.scatter(x, y_ask, color='red', s=10, label="Ask")
+            self.ask_lines = [self.ax.plot([x[i], x[i]], [y_mid[i], y_ask[i]], color='red', linewidth=0.5)[0] for i in range(len(x))]
+        else:
+            self.asks = None
+            self.ask_lines = []
 
         fine_x = np.linspace(np.min(x), np.max(x), 200)
 
