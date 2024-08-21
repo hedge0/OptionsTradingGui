@@ -96,6 +96,11 @@ class PlotManager:
                                             values=["Leisen-Reimer", "Barone-Adesi Whaley"], state="readonly", style="TCombobox")
         self.pricing_model_menu.pack(side=tk.LEFT, padx=5)
 
+        tk.Label(selection_and_metrics_frame, text="Mispricing:").pack(side=tk.LEFT, padx=5)
+        self.mispricing_var = tk.StringVar(value="0.0")
+        self.mispricing_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.mispricing_var, width=10)
+        self.mispricing_entry.pack(side=tk.LEFT, padx=5)
+
         tk.Label(selection_and_metrics_frame, text="Max Spread:").pack(side=tk.LEFT, padx=5)
         self.spread_filter_var = tk.StringVar(value="0.0")
         self.spread_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.spread_filter_var, width=10)
@@ -148,6 +153,28 @@ class PlotManager:
         data_dict = self.data_gen.data
         sorted_data = dict(sorted(data_dict.items()))
 
+        try:
+            strike_filter_value = float(self.strike_filter_var.get())
+            if strike_filter_value < 0.0:
+                raise ValueError("Strike Filter must be 0.0 or above.")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Strike Filter (0.0 or above).")
+            return
+        
+        try:
+            mispricing_value = float(self.mispricing_var.get())
+            if mispricing_value < 0.0:
+                raise ValueError("Mispricing must be 0.0 or above.")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Mispricing (0.0 or above).")
+            return
+        
+        try:
+            max_spread = float(self.spread_filter_var.get())
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Max Bid-Ask Spread.")
+            return
+
         if self.liquidity_filter_var.get():
             sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0}
 
@@ -167,36 +194,17 @@ class PlotManager:
                 for price_type, price in prices.items()
             }
 
-        # Get the Strike Filter value and ensure it's a float 0.0 or above
-        try:
-            strike_filter_value = float(self.strike_filter_var.get())
-            if strike_filter_value < 0.0:
-                raise ValueError("Strike Filter must be 0.0 or above.")
-        except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter a valid number for Strike Filter (0.0 or above).")
-            return
-
-        # Extract x, y_bid, y_ask, and y_mid from the dictionary
         strike_prices = np.array(list(sorted_data.keys()))
 
-        # Apply the strike filter only if strike_filter_value is greater than 0.0
         if strike_filter_value > 0.0:
             x = filter_strikes(strike_prices, np.mean(strike_prices), num_stdev=strike_filter_value)
         else:
             x = strike_prices
             
         sorted_data = {strike: prices for strike, prices in sorted_data.items() if strike in x}
-
         y_bid = np.array([prices['bid'] for prices in sorted_data.values()])
         y_ask = np.array([prices['ask'] for prices in sorted_data.values()])
         y_mid = np.array([prices['mid'] for prices in sorted_data.values()])
-
-        # Apply the bid-ask spread filter if necessary
-        try:
-            max_spread = float(self.spread_filter_var.get())
-        except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter a valid number for Max Bid-Ask Spread.")
-            return
         
         if (max_spread > 0.0):
             mask = (y_ask - y_bid) <= max_spread
@@ -213,16 +221,29 @@ class PlotManager:
         # Clear previous scatter plots if they exist
         if hasattr(self, 'midpoints') and self.midpoints:
             self.midpoints.remove()
+            self.midpoints = None
+
+        if hasattr(self, 'outliers') and self.outliers:
+            self.outliers.remove()
+            self.outliers = None
+
         if hasattr(self, 'bids') and self.bids:
             self.bids.remove()
+            self.bids = None
+
         if hasattr(self, 'asks') and self.asks:
             self.asks.remove()
+            self.asks = None
+
         if hasattr(self, 'bid_lines'):
             for line in self.bid_lines:
                 line.remove()
+            self.bid_lines = []
+
         if hasattr(self, 'ask_lines'):
             for line in self.ask_lines:
                 line.remove()
+            self.ask_lines = []
 
         # Normalize X values here
         scaler = MinMaxScaler()
@@ -238,13 +259,34 @@ class PlotManager:
 
         # Apply the selected objective function and fit the model
         params = fit_model(x_normalized, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
-        fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 200)
+        fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
         interpolated_y = model(np.log(fine_x_normalized), params)
         chi_squared, avE5 = compute_metrics(x_normalized, y_mid, model, params)
+        fine_x = np.linspace(np.min(x), np.max(x), 400)
 
-        # Apply results to plot
+        outliers_indices = []
+        if mispricing_value > 0.0:
+            for i, x_value in enumerate(x):
+                closest_index = np.argmin(np.abs(fine_x - x_value))
+                interpolated_y_value = interpolated_y[closest_index]
+                y_mid_value = data_dict[x_value]['mid']
+                
+                if self.selected_pricing_model.get() == "Leisen-Reimer":
+                    option_price = leisen_reimer_tree(S, x_value, T, r, interpolated_y_value, option_type=self.type_var.get())
+                else:
+                    option_price = barone_adesi_whaley_american_option_price(S, x_value, T, r, interpolated_y_value, option_type=self.type_var.get())
+                
+                diff = abs(y_mid_value - option_price)
+                
+                if diff > mispricing_value:
+                    outliers_indices.append(i)
+
+
         self.metrics_text.config(text=f"χ²: {chi_squared:.4f}    avE5: {avE5:.2f} bps")
         self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
+
+        if outliers_indices:
+            self.outliers = self.ax.scatter(x[outliers_indices], y_mid[outliers_indices], color='yellow', s=20, label="Outliers")
 
         if self.bid_var.get():
             self.bids = self.ax.scatter(x, y_bid, color='red', s=10, label="Bid")
@@ -259,8 +301,6 @@ class PlotManager:
         else:
             self.asks = None
             self.ask_lines = []
-
-        fine_x = np.linspace(np.min(x), np.max(x), 200)
 
         if hasattr(self, 'fit_line'):
             self.fit_line.set_data(fine_x, interpolated_y)
