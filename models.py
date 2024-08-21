@@ -247,6 +247,7 @@ def barone_adesi_whaley_american_option_price(S, K, T, r, sigma, option_type='ca
     else:
         raise ValueError("option_type must be 'calls' or 'puts'.")
 
+@njit
 def calculate_implied_volatility_baw(mid_price, S, K, r, T, option_type='calls', max_iterations=100, tolerance=1e-8):
     """
     Calculate the implied volatility using the Barone-Adesi Whaley model.
@@ -321,6 +322,7 @@ def leisen_reimer_tree(S, K, T, r, sigma, N=100, option_type='calls'):
 
     return values[0]
 
+@njit
 def calculate_implied_volatility_lr(mid_price, S, K, r, T, option_type='calls', N=100, max_iterations=100, tolerance=1e-8):
     """
     Calculate implied volatility using the Leisen-Reimer binomial tree method.
