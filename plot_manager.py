@@ -1,7 +1,9 @@
 import asyncio
+import datetime
 import math
 import time
 import numpy as np
+from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -33,6 +35,9 @@ class PlotManager:
         self.selected_pricing_model = tk.StringVar(value="Leisen-Reimer")
         self.press_event = None
 
+        self.quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None})
+        self.underlying_price = 0.0
+
         style = ttk.Style()
         style.theme_use('clam')
         style.configure("TCombobox",
@@ -49,7 +54,6 @@ class PlotManager:
         self.create_dropdown_and_button()
         self.setup_plot()
         self.update_plot()
-        self.update_data_and_plot()
         self.canvas.mpl_connect('scroll_event', lambda event: on_scroll(event, self))
         self.canvas.mpl_connect('motion_notify_event', lambda event: on_mouse_move(event, self))
         self.canvas.mpl_connect('button_press_event', lambda event: on_press(event, self))
@@ -177,8 +181,10 @@ class PlotManager:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Epsilon (0.0 or above).")
             return    
 
-        S = 176.94
-        T = 0.030540532315417302
+        S = self.underlying_price
+        current_time = datetime.now()
+        expiration_time = datetime.combine(self.exp_date_var.get(), datetime.min.time()) + datetime.timedelta(hours=16)
+        T = (expiration_time - current_time).total_seconds() / (365 * 24 * 3600)
         r = self.risk_free_rate
 
         # Process original sorted_data_lr (calculate IVs for bid, ask, and mid prices using the selected pricing model)
@@ -309,61 +315,62 @@ class PlotManager:
 
         self.canvas.draw()
 
-    def update_data_and_plot(self):
-        self.data_gen.update_data()
-        self.update_plot()
-        self.root.after(10000, self.update_data_and_plot)  # 10 seconds interval
+    def update_mid_price(self, quote):
+        """
+        Update the mid price based on the new quote.
+        
+        Args:
+            quote: The incoming quote object.
+        """
+        bid_price = quote.bidPrice
+        ask_price = quote.askPrice
 
-async def stream_live_prices(session, subs_list):
-    async with DXLinkStreamer(session) as streamer:
-        await streamer.subscribe(EventType.QUOTE, subs_list)
-        start_time = time.time()
-        while True:
-            quote = await streamer.get_event(EventType.QUOTE)
-            process_quote(quote)
-            # Check if 1 second has passed
-            if time.time() - start_time >= 1:
-                start_time = time.time()
+        if bid_price is not None and ask_price is not None:
+            self.underlying_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
 
-async def stream_raw_quotes(session, ticker_list):
-    async with DXLinkStreamer(session) as streamer:
-        await streamer.subscribe(EventType.QUOTE, ticker_list)
-        while True:
-            quote = await streamer.get_event(EventType.QUOTE)
-            update_mid_price(quote)
+    def process_quote(self, quote):
+        """
+        Process incoming quote and update the plot data structure.
+        
+        Args:
+            quote: Incoming quote object.
+        """
+        event_symbol = quote.eventSymbol
+        bid_price = quote.bidPrice
+        ask_price = quote.askPrice
+        strike_price = self.streamer_to_strike_map.get(event_symbol)
 
-def update_mid_price(quote):
-    """
-    Update the global underlying_price based on the new quote.
-    
-    Args:
-        quote: The incoming quote object.
-    """
-    bid_price = quote.bidPrice
-    ask_price = quote.askPrice
-    underlying_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
+        if strike_price is not None:
+            mid_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
+            self.quote_data[float(strike_price)] = {
+                "bid": float(bid_price),
+                "ask": float(ask_price),
+                "mid": float(mid_price)
+            }
 
-def process_quote(quote):
-    """
-    Process incoming quote and update the data structure.
+    async def stream_live_prices(self, session, subs_list):
+        async with DXLinkStreamer(session) as streamer:
+            await streamer.subscribe(EventType.QUOTE, subs_list)
+            while True:
+                quote = await streamer.get_event(EventType.QUOTE)
+                self.process_quote(quote)
 
-    Args:
-        quote: Incoming quote object.
-    """
-    event_symbol = quote.eventSymbol
-    bid_price = quote.bidPrice
-    ask_price = quote.askPrice
-    #strike_price = streamer_to_strike_map.get(event_symbol)
+                # Check if 1 second has passed
+                if time.time() - start_time >= 1:
+                    self.update_plot()
+                    start_time = time.time()  # Reset the timer
 
-    #if strike_price is not None:
-    #    mid_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
-    #    quote_data[float(strike_price)] = {
-    #        "bid": float(bid_price),
-    #        "ask": float(ask_price),
-    #        "mid": float(mid_price)
-    #    }
+    async def stream_raw_quotes(self, session, ticker_list):
+        async with DXLinkStreamer(session) as streamer:
+            await streamer.subscribe(EventType.QUOTE, ticker_list)
+            while True:
+                quote = await streamer.get_event(EventType.QUOTE)
+                self.update_mid_price(quote)
 
 def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
     root = tk.Tk()
-    PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate)
+    plot_manager = PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate)
     root.mainloop()
+    # Starting the asynchronous tasks
+    asyncio.run(plot_manager.stream_live_prices(session, ticker_list))
+    asyncio.run(plot_manager.stream_raw_quotes(session, ticker_list))
