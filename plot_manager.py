@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics, calculate_implied_volatility_lr, calculate_implied_volatility_baw
 from data_generator import DataGenerator
+from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
 class PlotManager:
     def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
@@ -44,10 +45,12 @@ class PlotManager:
         self.setup_plot()
         self.update_plot()
         self.update_data_and_plot()
-        self.canvas.mpl_connect('scroll_event', self.on_scroll)
-        self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
-        self.canvas.mpl_connect('button_press_event', self.on_press)
-        self.canvas.mpl_connect('button_release_event', self.on_release)
+
+        self.canvas.mpl_connect('scroll_event', lambda event: on_scroll(event, self))
+        self.canvas.mpl_connect('motion_notify_event', lambda event: on_mouse_move(event, self))
+        self.canvas.mpl_connect('button_press_event', lambda event: on_press(event, self))
+        self.canvas.mpl_connect('button_release_event', lambda event: on_release(event, self))
+
         self.precompile_numba_functions()
 
     def precompile_numba_functions(self):
@@ -64,7 +67,6 @@ class PlotManager:
 
         self.coord_label = tk.Label(left_frame, text="X: N/A    Y: N/A", fg='black', bg=dropdown_frame.cget('background'))
         self.coord_label.pack(side=tk.LEFT, padx=5)
-
         self.metrics_text = tk.Label(left_frame, text="χ²: N/A    avE5: N/A bps", fg='black', bg=dropdown_frame.cget('background'))
         self.metrics_text.pack(side=tk.LEFT, padx=10)
 
@@ -123,7 +125,6 @@ class PlotManager:
         self.bid_var = tk.BooleanVar(value=True)
         self.bid_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Bid", variable=self.bid_var)
         self.bid_checkbox.pack(side=tk.LEFT, padx=5)
-
         self.ask_var = tk.BooleanVar(value=True)
         self.ask_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Ask", variable=self.ask_var)
         self.ask_checkbox.pack(side=tk.LEFT, padx=5)
@@ -277,56 +278,6 @@ class PlotManager:
         self.data_gen.update_data()
         self.update_plot()
         self.root.after(10000, self.update_data_and_plot)  # 10 seconds interval
-
-    def on_mouse_move(self, event):
-        if event.inaxes:
-            if event.xdata is not None and event.ydata is not None:
-                x_coord = f"{event.xdata:.2f}"
-                y_coord = f"{event.ydata:.4f}"
-                self.coord_label.config(text=f"X: {x_coord}    Y: {y_coord}")
-
-            if self.press_event is not None:
-                dx = event.xdata - self.press_event.xdata
-                dy = event.ydata - self.press_event.ydata
-                cur_xlim = self.ax.get_xlim()
-                cur_ylim = self.ax.get_ylim()
-                self.ax.set_xlim(cur_xlim[0] - dx, cur_xlim[1] - dx)
-                self.ax.set_ylim(cur_ylim[0] - dy, cur_ylim[1] - dy)
-                self.canvas.draw()
-
-    def on_scroll(self, event):
-        """Zoom in/out with the scroll wheel."""
-        if event.xdata is None or event.ydata is None:
-            return
-
-        base_scale = 1.2
-        cur_xlim = self.ax.get_xlim()
-        cur_ylim = self.ax.get_ylim()
-
-        if event.button == 'up':
-            scale_factor = 1 / base_scale
-        elif event.button == 'down':
-            scale_factor = base_scale
-        else:
-            scale_factor = 1
-
-        new_xlim = [event.xdata - (event.xdata - cur_xlim[0]) * scale_factor,
-                    event.xdata + (cur_xlim[1] - event.xdata) * scale_factor]
-        new_ylim = [event.ydata - (event.ydata - cur_ylim[0]) * scale_factor,
-                    event.ydata + (cur_ylim[1] - event.ydata) * scale_factor]
-
-        self.ax.set_xlim(new_xlim)
-        self.ax.set_ylim(new_ylim)
-        self.canvas.draw()
-
-    def on_press(self, event):
-        """Store the initial press event for dragging."""
-        if event.inaxes:
-            self.press_event = event
-
-    def on_release(self, event):
-        """Reset the press_event after releasing the mouse button."""
-        self.press_event = None
 
 def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
     root = tk.Tk()
