@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.optimize import minimize
+from scipy.interpolate import RBFInterpolator
 from math import log, sqrt, exp
 from numba import njit
-from scipy.interpolate import RBFInterpolator
 
 def svi_model(k, params):
     """
