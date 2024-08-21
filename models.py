@@ -247,6 +247,7 @@ def barone_adesi_whaley_american_option_price(S, K, T, r, sigma, option_type='ca
     else:
         raise ValueError("option_type must be 'calls' or 'puts'.")
 
+@njit
 def calculate_implied_volatility_baw(mid_price, S, K, r, T, option_type='calls', max_iterations=100, tolerance=1e-8):
     """
     Calculate the implied volatility using the Barone-Adesi Whaley model.
@@ -321,6 +322,7 @@ def leisen_reimer_tree(S, K, T, r, sigma, N, option_type='calls'):
 
     return values[0]
 
+@njit
 def calculate_implied_volatility_lr(mid_price, S, K, r, T, option_type='calls', N=100, max_iterations=100, tolerance=1e-8):
     """
     Calculate implied volatility using the Leisen-Reimer binomial tree method.
@@ -358,3 +360,67 @@ def calculate_implied_volatility_lr(mid_price, S, K, r, T, option_type='calls', 
             upper_vol *= 2.0
 
     return mid_vol
+
+@njit
+def leisen_reimer_price(S, K, T, r, sigma, N=100, option_type='calls'):
+    """
+    Calculate the price of an American option using the Leisen-Reimer binomial tree method.
+    
+    Args:
+        S (float): Current stock price.
+        K (float): Strike price of the option.
+        T (float): Time to expiration in years.
+        r (float): Risk-free interest rate.
+        sigma (float): Implied volatility.
+        N (int, optional): Number of time steps in the binomial tree. Defaults to 100.
+        option_type (str, optional): Type of option ('calls' or 'puts'). Defaults to 'calls'.
+    
+    Returns:
+        float: The calculated option price.
+    """
+    dt = T / N
+    u = exp(sigma * sqrt(dt))
+    d = 1 / u
+    p = (exp(r * dt) - d) / (u - d)
+    
+    prices = np.zeros(N + 1)
+    prices[0] = S * d**N
+    for i in range(1, N + 1):
+        prices[i] = prices[i - 1] * u / d
+    
+    values = np.zeros(N + 1)
+    if option_type == 'calls':
+        for i in range(N + 1):
+            values[i] = max(0, prices[i] - K)
+    else:
+        for i in range(N + 1):
+            values[i] = max(0, K - prices[i])
+    
+    for i in range(N - 1, -1, -1):
+        for j in range(i + 1):
+            values[j] = exp(-r * dt) * (p * values[j + 1] + (1 - p) * values[j])
+            prices[j] = prices[j] / u
+            if option_type == 'calls':
+                values[j] = max(values[j], prices[j] - K)
+            else:
+                values[j] = max(values[j], K - prices[j])
+    
+    return values[0]
+
+@njit
+def barone_adesi_whaley_price(S, K, T, r, sigma, option_type='calls'):
+    """
+    Calculate the price of an American option using the Barone-Adesi Whaley model, given an implied volatility.
+
+    Args:
+        S (float): Current stock price.
+        K (float): Strike price of the option.
+        T (float): Time to expiration in years.
+        r (float): Risk-free interest rate.
+        sigma (float): Implied volatility.
+        option_type (str, optional): Type of option ('calls' or 'puts'). Defaults to 'calls'.
+
+    Returns:
+        float: The calculated option price.
+    """
+    return barone_adesi_whaley_american_option_price(S, K, T, r, sigma, option_type)
