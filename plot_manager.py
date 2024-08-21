@@ -145,7 +145,7 @@ class PlotManager:
         self.ax.set_ylabel("Implied Volatility")
 
     def update_plot(self):
-        data_dict = self.data_gen.data
+        data_dict = self.quote_data
         sorted_data = dict(sorted(data_dict.items()))
 
         try:
@@ -341,7 +341,7 @@ class PlotManager:
         strike_price = self.streamer_to_strike_map.get(event_symbol)
 
         if strike_price is not None:
-            mid_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
+            mid_price = float((bid_price + ask_price) / 2)
             self.quote_data[float(strike_price)] = {
                 "bid": float(bid_price),
                 "ask": float(ask_price),
@@ -372,5 +372,5 @@ def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_st
     plot_manager = PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate)
     root.mainloop()
     # Starting the asynchronous tasks
-    asyncio.run(plot_manager.stream_live_prices(session, ticker_list))
     asyncio.run(plot_manager.stream_raw_quotes(session, ticker_list))
+    asyncio.run(plot_manager.stream_live_prices(session, ticker_list))
