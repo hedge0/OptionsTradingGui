@@ -2,6 +2,7 @@ import numpy as np
 from scipy.optimize import minimize
 from math import log, sqrt, exp
 from numba import njit
+from scipy.interpolate import RBFInterpolator
 
 def svi_model(k, params):
     """
@@ -58,6 +59,24 @@ def sabr_model(k, params):
     """
     alpha, beta, rho, nu, f0 = params
     return alpha * (1 + beta * k + rho * k**2 + nu * k**3 + f0 * k**4)
+
+def rbf_model(k, y, epsilon=None, smoothing=0.0):
+    """
+    RBF Interpolation model function.
+
+    Args:
+        k (array-like): Log-moneyness of the option.
+        y (array-like): Implied volatilities corresponding to log-moneyness.
+        epsilon (float, optional): Regularization parameter for RBF. Defaults to None.
+        smoothing (float, optional): Smoothing factor for RBF. Defaults to 0.0.
+
+    Returns:
+        function: A callable function that interpolates implied volatilities for given log-moneyness.
+    """
+    if epsilon is None:
+        epsilon = np.mean(np.diff(np.sort(k)))
+    rbf = RBFInterpolator(k[:, np.newaxis], y, kernel='multiquadric', epsilon=epsilon, smoothing=smoothing)
+    return rbf
 
 def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WRE"):
     """
@@ -118,6 +137,9 @@ def fit_model(x, y_mid, y_bid, y_ask, model, method="WRE"):
     if model == svi_model:
         initial_guess = [0.01, 0.5, -0.3, 0.0, 0.2]
         bounds = [(0, 1), (0, 1), (-1, 1), (-1, 1), (0.01, 1)]
+    elif model == rbf_model:
+        rbf = rbf_model(k, y_mid)
+        return rbf
     else:
         initial_guess = [0.2, 0.3, 0.1, 0.2, 0.1]
         bounds = [(None, None), (None, None), (None, None), (None, None), (None, None)]

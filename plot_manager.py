@@ -5,7 +5,7 @@ from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from data_generator import DataGenerator
-from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, fit_model, compute_metrics, calculate_implied_volatility_lr, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price, leisen_reimer_tree
+from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, rbf_model, fit_model, compute_metrics, calculate_implied_volatility_lr, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price, leisen_reimer_tree
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
 class PlotManager:
@@ -83,13 +83,18 @@ class PlotManager:
         self.fit_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Fit:", variable=self.fit_var)
         self.fit_checkbox.pack(side=tk.LEFT, padx=5)
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
-                                        values=["RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
+                                        values=["RFV", "SVI", "SLV", "SABR", "RBF"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
 
         tk.Label(selection_and_metrics_frame, text="Obj. Function:").pack(side=tk.LEFT, padx=5)
         self.objective_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_objective, 
                                         values=["WLS", "WRE", "LS", "RE"], state="readonly", style="TCombobox")
         self.objective_menu.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(selection_and_metrics_frame, text="Epsilon:").pack(side=tk.LEFT, padx=5)
+        self.epsilon_var = tk.StringVar(value="0.5")
+        self.epsilon_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.epsilon_var, width=10)
+        self.epsilon_entry.pack(side=tk.LEFT, padx=5)
 
         tk.Label(selection_and_metrics_frame, text="IV Model:").pack(side=tk.LEFT, padx=5)
         self.pricing_model_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_pricing_model,
@@ -178,6 +183,14 @@ class PlotManager:
         if self.liquidity_filter_var.get():
             sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0}
 
+        try:
+            epsilon_value = float(self.epsilon_var.get())
+            if epsilon_value < 0.0:
+                raise ValueError("Epsilon must be 0.0 or above.")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Epsilon (0.0 or above).")
+            return    
+
         S = 176.94
         T = 0.030540532315417302
         r = self.risk_free_rate
@@ -255,13 +268,25 @@ class PlotManager:
             "SLV": slv_model,
             "RFV": rfv_model,
             "SABR": sabr_model,
+            "RBF": rbf_model,
         }.get(self.selected_method.get())
 
         # Apply the selected objective function and fit the model
-        params = fit_model(x_normalized, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
-        fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
-        interpolated_y = model(np.log(fine_x_normalized), params)
-        chi_squared, avE5 = compute_metrics(x_normalized, y_mid, model, params)
+        if self.selected_method.get() == "RBF":
+            epsilon = epsilon_value
+            smoothing = 0.000000000001
+
+            interpolator = model(np.log(x_normalized), y_mid, epsilon=epsilon, smoothing=smoothing)
+            fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
+            interpolated_y = interpolator(np.log(fine_x_normalized).reshape(-1, 1))
+            chi_squared = np.sum((y_mid - interpolator(np.log(x_normalized).reshape(-1, 1))) ** 2)
+            avE5 = np.mean(np.abs(y_mid - interpolator(np.log(x_normalized).reshape(-1, 1)))) * 10000
+        else:
+            params = fit_model(x_normalized, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
+            fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
+            interpolated_y = model(np.log(fine_x_normalized), params)
+            chi_squared, avE5 = compute_metrics(x_normalized, y_mid, model, params)
+
         fine_x = np.linspace(np.min(x), np.max(x), 400)
 
         outliers_indices = []
