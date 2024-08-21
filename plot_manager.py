@@ -1,9 +1,14 @@
+import asyncio
+import math
+import time
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import tkinter as tk
 from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from tastytrade import DXLinkStreamer
+from tastytrade.dxfeed import EventType
 from data_generator import DataGenerator
 from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, rbf_model, fit_model, compute_metrics, calculate_implied_volatility_lr, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price, leisen_reimer_tree
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
@@ -45,12 +50,10 @@ class PlotManager:
         self.setup_plot()
         self.update_plot()
         self.update_data_and_plot()
-
         self.canvas.mpl_connect('scroll_event', lambda event: on_scroll(event, self))
         self.canvas.mpl_connect('motion_notify_event', lambda event: on_mouse_move(event, self))
         self.canvas.mpl_connect('button_press_event', lambda event: on_press(event, self))
         self.canvas.mpl_connect('button_release_event', lambda event: on_release(event, self))
-
         self.precompile_numba_functions()
 
     def precompile_numba_functions(self):
@@ -61,84 +64,67 @@ class PlotManager:
     def create_dropdown_and_button(self):
         dropdown_frame = tk.Frame(self.root)
         dropdown_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
-
         left_frame = tk.Frame(dropdown_frame)
         left_frame.pack(side=tk.LEFT, anchor=tk.W)
-
         self.coord_label = tk.Label(left_frame, text="X: N/A    Y: N/A", fg='black', bg=dropdown_frame.cget('background'))
         self.coord_label.pack(side=tk.LEFT, padx=5)
         self.metrics_text = tk.Label(left_frame, text="χ²: N/A    avE5: N/A bps", fg='black', bg=dropdown_frame.cget('background'))
         self.metrics_text.pack(side=tk.LEFT, padx=10)
-
         right_frame = tk.Frame(dropdown_frame)
         right_frame.pack(side=tk.RIGHT, anchor=tk.E)
-
         metrics_frame = tk.Frame(right_frame)
         metrics_frame.pack(side=tk.LEFT, padx=5)
-
         selection_and_metrics_frame = tk.Frame(right_frame)
         selection_and_metrics_frame.pack(side=tk.LEFT)
-
         self.fit_var = tk.BooleanVar(value=True)
         self.fit_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Fit:", variable=self.fit_var)
         self.fit_checkbox.pack(side=tk.LEFT, padx=5)
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
                                         values=["RBF", "RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
-
         tk.Label(selection_and_metrics_frame, text="Obj. Function:").pack(side=tk.LEFT, padx=5)
         self.objective_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_objective, 
                                         values=["WLS", "WRE", "LS", "RE"], state="readonly", style="TCombobox")
         self.objective_menu.pack(side=tk.LEFT, padx=5)
-
         tk.Label(selection_and_metrics_frame, text="Epsilon:").pack(side=tk.LEFT, padx=5)
         self.epsilon_var = tk.StringVar(value="0.5")
         self.epsilon_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.epsilon_var, width=10)
         self.epsilon_entry.pack(side=tk.LEFT, padx=5)
-
         tk.Label(selection_and_metrics_frame, text="IV Model:").pack(side=tk.LEFT, padx=5)
         self.pricing_model_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_pricing_model,
                                             values=["Leisen-Reimer", "Barone-Adesi Whaley"], state="readonly", style="TCombobox")
         self.pricing_model_menu.pack(side=tk.LEFT, padx=5)
-
         tk.Label(selection_and_metrics_frame, text="Mispricing:").pack(side=tk.LEFT, padx=5)
         self.mispricing_var = tk.StringVar(value="0.0")
         self.mispricing_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.mispricing_var, width=10)
         self.mispricing_entry.pack(side=tk.LEFT, padx=5)
-
         tk.Label(selection_and_metrics_frame, text="Max Spread:").pack(side=tk.LEFT, padx=5)
         self.spread_filter_var = tk.StringVar(value="0.0")
         self.spread_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.spread_filter_var, width=10)
         self.spread_filter_entry.pack(side=tk.LEFT, padx=5)
-
         tk.Label(selection_and_metrics_frame, text="Strike Filter:").pack(side=tk.LEFT, padx=5)
         self.strike_filter_var = tk.StringVar(value="0.0")
         self.strike_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.strike_filter_var, width=10)
         self.strike_filter_entry.pack(side=tk.LEFT, padx=5)
-
         self.liquidity_filter_var = tk.BooleanVar(value=True)
         self.liquidity_filter_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Liquidity Filter", variable=self.liquidity_filter_var)
         self.liquidity_filter_checkbox.pack(side=tk.LEFT, padx=5)
-
         tk.Label(selection_and_metrics_frame, text="Exp. Date:").pack(side=tk.LEFT, padx=5)
         self.exp_date_var = tk.StringVar(value=self.expiration_dates_list[0])
         self.exp_date_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.exp_date_var, 
                                         values=self.expiration_dates_list, state="readonly", style="TCombobox")
         self.exp_date_menu.pack(side=tk.LEFT, padx=5)
-
         tk.Label(selection_and_metrics_frame, text="Type:").pack(side=tk.LEFT, padx=5)
         self.type_var = tk.StringVar(value="calls")
         self.type_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.type_var, 
                                     values=["calls", "puts"], state="readonly", style="TCombobox")
         self.type_menu.pack(side=tk.LEFT, padx=5)
-
         self.bid_var = tk.BooleanVar(value=True)
         self.bid_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Bid", variable=self.bid_var)
         self.bid_checkbox.pack(side=tk.LEFT, padx=5)
         self.ask_var = tk.BooleanVar(value=True)
         self.ask_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Ask", variable=self.ask_var)
         self.ask_checkbox.pack(side=tk.LEFT, padx=5)
-
         tk.Button(selection_and_metrics_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT, padx=5)
 
     def setup_plot(self):
@@ -201,14 +187,12 @@ class PlotManager:
                 pricing_model_function = calculate_implied_volatility_lr
             else:
                 pricing_model_function = calculate_implied_volatility_baw
-
             sorted_data[strike] = {
                 price_type: pricing_model_function(price, S, strike, r, T, option_type=self.type_var.get())
                 for price_type, price in prices.items()
             }
 
         strike_prices = np.array(list(sorted_data.keys()))
-
         if strike_filter_value > 0.0:
             x = filter_strikes(strike_prices, np.mean(strike_prices), num_stdev=strike_filter_value)
         else:
@@ -225,34 +209,25 @@ class PlotManager:
             y_mid = y_mid[mask]
             y_bid = y_bid[mask]
             y_ask = y_ask[mask]
-
-        # Check if any data points remain after filtering
         if len(x) == 0:
             messagebox.showwarning("No Data", "All data points were filtered out. Adjust the spread filter.")
             return
-
-        # Clear previous scatter plots if they exist
         if hasattr(self, 'midpoints') and self.midpoints:
             self.midpoints.remove()
             self.midpoints = None
-
         if hasattr(self, 'outliers') and self.outliers:
             self.outliers.remove()
             self.outliers = None
-
         if hasattr(self, 'bids') and self.bids:
             self.bids.remove()
             self.bids = None
-
         if hasattr(self, 'asks') and self.asks:
             self.asks.remove()
             self.asks = None
-
         if hasattr(self, 'bid_lines'):
             for line in self.bid_lines:
                 line.remove()
             self.bid_lines = []
-
         if hasattr(self, 'ask_lines'):
             for line in self.ask_lines:
                 line.remove()
@@ -271,12 +246,9 @@ class PlotManager:
             "RBF": rbf_model,
         }.get(self.selected_method.get())
 
-        # Apply the selected objective function and fit the model
         if self.selected_method.get() == "RBF":
-            epsilon = epsilon_value
             smoothing = 0.000000000001
-
-            interpolator = model(np.log(x_normalized), y_mid, epsilon=epsilon, smoothing=smoothing)
+            interpolator = model(np.log(x_normalized), y_mid, epsilon=epsilon_value, smoothing=smoothing)
             fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
             interpolated_y = interpolator(np.log(fine_x_normalized).reshape(-1, 1))
             chi_squared = np.sum((y_mid - interpolator(np.log(x_normalized).reshape(-1, 1))) ** 2)
@@ -288,7 +260,6 @@ class PlotManager:
             chi_squared, avE5 = compute_metrics(x_normalized, y_mid, model, params)
 
         fine_x = np.linspace(np.min(x), np.max(x), 400)
-
         outliers_indices = []
         if mispricing_value > 0.0:
             for i, x_value in enumerate(x):
@@ -305,7 +276,6 @@ class PlotManager:
                 
                 if diff > mispricing_value:
                     outliers_indices.append(i)
-
 
         self.metrics_text.config(text=f"χ²: {chi_squared:.4f}    avE5: {avE5:.2f} bps")
         self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
@@ -343,6 +313,55 @@ class PlotManager:
         self.data_gen.update_data()
         self.update_plot()
         self.root.after(10000, self.update_data_and_plot)  # 10 seconds interval
+
+async def stream_live_prices(session, subs_list):
+    async with DXLinkStreamer(session) as streamer:
+        await streamer.subscribe(EventType.QUOTE, subs_list)
+        start_time = time.time()
+        while True:
+            quote = await streamer.get_event(EventType.QUOTE)
+            process_quote(quote)
+            # Check if 1 second has passed
+            if time.time() - start_time >= 1:
+                start_time = time.time()
+
+async def stream_raw_quotes(session, ticker_list):
+    async with DXLinkStreamer(session) as streamer:
+        await streamer.subscribe(EventType.QUOTE, ticker_list)
+        while True:
+            quote = await streamer.get_event(EventType.QUOTE)
+            update_mid_price(quote)
+
+def update_mid_price(quote):
+    """
+    Update the global underlying_price based on the new quote.
+    
+    Args:
+        quote: The incoming quote object.
+    """
+    bid_price = quote.bidPrice
+    ask_price = quote.askPrice
+    underlying_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
+
+def process_quote(quote):
+    """
+    Process incoming quote and update the data structure.
+
+    Args:
+        quote: Incoming quote object.
+    """
+    event_symbol = quote.eventSymbol
+    bid_price = quote.bidPrice
+    ask_price = quote.askPrice
+    #strike_price = streamer_to_strike_map.get(event_symbol)
+
+    #if strike_price is not None:
+    #    mid_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
+    #    quote_data[float(strike_price)] = {
+    #        "bid": float(bid_price),
+    #        "ask": float(ask_price),
+    #        "mid": float(mid_price)
+    #    }
 
 def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
     root = tk.Tk()
