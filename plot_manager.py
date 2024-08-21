@@ -77,17 +77,19 @@ class PlotManager:
         selection_and_metrics_frame = tk.Frame(right_frame)
         selection_and_metrics_frame.pack(side=tk.LEFT)
 
-        tk.Label(selection_and_metrics_frame, text="Model:").pack(side=tk.LEFT)
+        self.fit_var = tk.BooleanVar(value=True)
+        self.fit_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Fit:", variable=self.fit_var)
+        self.fit_checkbox.pack(side=tk.LEFT, padx=5)
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
                                         values=["RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
 
-        tk.Label(selection_and_metrics_frame, text="Objective Function:").pack(side=tk.LEFT, padx=5)
+        tk.Label(selection_and_metrics_frame, text="Obj. Function:").pack(side=tk.LEFT, padx=5)
         self.objective_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_objective, 
                                         values=["WLS", "WRE", "LS", "RE"], state="readonly", style="TCombobox")
         self.objective_menu.pack(side=tk.LEFT, padx=5)
 
-        tk.Label(selection_and_metrics_frame, text="Pricing Model:").pack(side=tk.LEFT, padx=5)
+        tk.Label(selection_and_metrics_frame, text="IV Model:").pack(side=tk.LEFT, padx=5)
         self.pricing_model_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_pricing_model,
                                             values=["Leisen-Reimer", "Barone-Adesi Whaley"], state="readonly", style="TCombobox")
         self.pricing_model_menu.pack(side=tk.LEFT, padx=5)
@@ -102,8 +104,7 @@ class PlotManager:
         self.strike_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.strike_filter_var, width=10)
         self.strike_filter_entry.pack(side=tk.LEFT, padx=5)
 
-        # Add the Liquidity Filter checkbox
-        self.liquidity_filter_var = tk.BooleanVar(value=True)  # Checked by default
+        self.liquidity_filter_var = tk.BooleanVar(value=True)
         self.liquidity_filter_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Liquidity Filter", variable=self.liquidity_filter_var)
         self.liquidity_filter_checkbox.pack(side=tk.LEFT, padx=5)
 
@@ -119,12 +120,11 @@ class PlotManager:
                                     values=["calls", "puts"], state="readonly", style="TCombobox")
         self.type_menu.pack(side=tk.LEFT, padx=5)
 
-        # Add Bid and Ask checkboxes
-        self.bid_var = tk.BooleanVar(value=True)  # Checked by default
+        self.bid_var = tk.BooleanVar(value=True)
         self.bid_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Bid", variable=self.bid_var)
         self.bid_checkbox.pack(side=tk.LEFT, padx=5)
 
-        self.ask_var = tk.BooleanVar(value=True)  # Checked by default
+        self.ask_var = tk.BooleanVar(value=True)
         self.ask_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Ask", variable=self.ask_var)
         self.ask_checkbox.pack(side=tk.LEFT, padx=5)
 
@@ -265,6 +265,11 @@ class PlotManager:
             self.fit_line.set_data(fine_x, interpolated_y)
         else:
             self.fit_line, = self.ax.plot(fine_x, interpolated_y, color='green', label="Fit", linewidth=1.5)
+
+        if self.fit_var.get():
+            self.fit_line.set_visible(True)
+        else:
+            self.fit_line.set_visible(False)
 
         self.canvas.draw()
 
