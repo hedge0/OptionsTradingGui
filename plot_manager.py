@@ -32,7 +32,6 @@ class PlotManager:
         self.ticker = ticker
         self.selected_pricing_model = tk.StringVar(value="Leisen-Reimer")
         self.press_event = None
-
         self.quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None})
         self.underlying_price = 0.0
 
@@ -41,7 +40,6 @@ class PlotManager:
         style.configure("TCombobox",
                         fieldbackground="white", background="white",
                         selectbackground="white", selectforeground="black")
-
         style.map('TCombobox',
                   background=[('readonly', 'white')],
                   fieldbackground=[('readonly', 'white')],
