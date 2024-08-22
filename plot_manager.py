@@ -59,7 +59,6 @@ class PlotManager:
         self.precompile_numba_functions()
 
     def precompile_numba_functions(self):
-        """Call numba-optimized functions with dummy data to precompile them."""
         calculate_implied_volatility_lr(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
         calculate_implied_volatility_baw(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
 
@@ -314,12 +313,6 @@ class PlotManager:
         self.canvas.draw()
 
     def update_mid_price(self, quote):
-        """
-        Update the mid price based on the new quote.
-        
-        Args:
-            quote: The incoming quote object.
-        """
         bid_price = quote.bidPrice
         ask_price = quote.askPrice
 
@@ -327,12 +320,6 @@ class PlotManager:
             self.underlying_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
 
     def process_quote(self, quote):
-        """
-        Process incoming quote and update the plot data structure.
-        
-        Args:
-            quote: Incoming quote object.
-        """
         event_symbol = quote.eventSymbol
         bid_price = quote.bidPrice
         ask_price = quote.askPrice
