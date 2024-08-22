@@ -150,7 +150,6 @@ class PlotManager:
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Strike Filter (0.0 or above).")
             return
-        
         try:
             mispricing_value = float(self.mispricing_var.get())
             if mispricing_value < 0.0:
@@ -158,16 +157,13 @@ class PlotManager:
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Mispricing (0.0 or above).")
             return
-        
         try:
             max_spread = float(self.spread_filter_var.get())
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Max Bid-Ask Spread.")
             return
-
         if self.liquidity_filter_var.get():
             sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0}
-
         try:
             epsilon_value = float(self.epsilon_var.get())
             if epsilon_value < 0.0:
@@ -313,7 +309,6 @@ class PlotManager:
     def update_mid_price(self, quote):
         bid_price = quote.bidPrice
         ask_price = quote.askPrice
-
         if bid_price is not None and ask_price is not None:
             self.underlying_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
 
@@ -322,7 +317,6 @@ class PlotManager:
         bid_price = quote.bidPrice
         ask_price = quote.askPrice
         strike_price = self.streamer_to_strike_map.get(event_symbol)
-
         if strike_price is not None:
             mid_price = float((bid_price + ask_price) / 2)
             self.quote_data[float(strike_price)] = {
