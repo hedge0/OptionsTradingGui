@@ -1,5 +1,5 @@
 import asyncio
-import datetime
+from datetime import datetime, timedelta
 import math
 import time
 import numpy as np
@@ -180,7 +180,7 @@ class PlotManager:
 
         S = self.underlying_price
         current_time = datetime.now()
-        expiration_time = datetime.combine(self.exp_date_var.get(), datetime.min.time()) + datetime.timedelta(hours=16)
+        expiration_time =datetime.combine(datetime.strptime(self.exp_date_var.get(), '%Y-%m-%d'), datetime.min.time()) + timedelta(hours=16)
         T = (expiration_time - current_time).total_seconds() / (365 * 24 * 3600)
         r = self.risk_free_rate
 
