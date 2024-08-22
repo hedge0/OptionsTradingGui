@@ -17,6 +17,19 @@ from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
 class PlotManager:
     def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
+        """
+        Initialize the PlotManager class.
+
+        Args:
+            root (tk.Tk): The root window for the Tkinter GUI.
+            ticker (str): The ticker symbol of the underlying asset.
+            session (Session): The Tastytrade session object.
+            expiration_to_strikes_map (dict): Mapping of expiration dates to their corresponding strikes.
+            streamer_to_strike_map (dict): Mapping of streamer symbols to their strike prices.
+            selected_date (str): The selected expiration date.
+            option_type (str): The type of option ('calls' or 'puts').
+            risk_free_rate (float): The risk-free rate used for calculations.
+        """
         self.root = root
         self.session = session
         self.expiration_to_strikes_map = expiration_to_strikes_map
@@ -37,6 +50,7 @@ class PlotManager:
         self.quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None})
         self.underlying_price = 0.0
 
+        # Configure the dropdown style
         style = ttk.Style()
         style.theme_use('clam')
         style.configure("TCombobox",
@@ -52,73 +66,122 @@ class PlotManager:
         self.create_dropdown_and_button()
         self.setup_plot()
 
+        # Connect mouse and scroll events to the plot
         self.canvas.mpl_connect('scroll_event', lambda event: on_scroll(event, self))
         self.canvas.mpl_connect('motion_notify_event', lambda event: on_mouse_move(event, self))
         self.canvas.mpl_connect('button_press_event', lambda event: on_press(event, self))
         self.canvas.mpl_connect('button_release_event', lambda event: on_release(event, self))
+
         self.precompile_numba_functions()
 
     def precompile_numba_functions(self):
+        """
+        Precompile Numba functions to improve performance.
+
+        This method calls Numba-compiled functions with sample data to ensure they are precompiled,
+        reducing latency during actual execution.
+        """
         calculate_implied_volatility_lr(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
         calculate_implied_volatility_baw(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
 
     def create_dropdown_and_button(self):
+        """
+        Create dropdown menus and buttons for selecting options and configuring the plot.
+
+        This method creates a GUI frame containing various dropdowns, checkboxes, and entry fields
+        for selecting the interpolation method, objective function, and other plot-related options.
+        """
         dropdown_frame = tk.Frame(self.root)
         dropdown_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
         left_frame = tk.Frame(dropdown_frame)
         left_frame.pack(side=tk.LEFT, anchor=tk.W)
+
+        # Coordinate label display
         self.coord_label = tk.Label(left_frame, text="X: N/A    Y: N/A", fg='black', bg=dropdown_frame.cget('background'))
         self.coord_label.pack(side=tk.LEFT, padx=5)
+
+        # Metrics display
         self.metrics_text = tk.Label(left_frame, text="χ²: N/A    avE5: N/A bps", fg='black', bg=dropdown_frame.cget('background'))
         self.metrics_text.pack(side=tk.LEFT, padx=10)
+
         right_frame = tk.Frame(dropdown_frame)
         right_frame.pack(side=tk.RIGHT, anchor=tk.E)
         metrics_frame = tk.Frame(right_frame)
         metrics_frame.pack(side=tk.LEFT, padx=5)
         selection_and_metrics_frame = tk.Frame(right_frame)
         selection_and_metrics_frame.pack(side=tk.LEFT)
+
+        # Fit line checkbox
         self.fit_var = tk.BooleanVar(value=True)
         self.fit_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Fit:", variable=self.fit_var)
         self.fit_checkbox.pack(side=tk.LEFT, padx=5)
+
+        # Method selection menu
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
                                         values=["RBF", "RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
+
+        # Objective function selection menu
         tk.Label(selection_and_metrics_frame, text="Obj. Function:").pack(side=tk.LEFT, padx=5)
         self.objective_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_objective, 
-                                        values=["WLS", "WRE", "LS", "RE"], state="readonly", style="TCombobox")
+                                           values=["WLS", "WRE", "LS", "RE"], state="readonly", style="TCombobox")
         self.objective_menu.pack(side=tk.LEFT, padx=5)
+
+        # Epsilon entry field
         tk.Label(selection_and_metrics_frame, text="Epsilon:").pack(side=tk.LEFT, padx=5)
         self.epsilon_var = tk.StringVar(value="0.5")
         self.epsilon_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.epsilon_var, width=10)
         self.epsilon_entry.pack(side=tk.LEFT, padx=5)
+
+        # Pricing model selection menu
         tk.Label(selection_and_metrics_frame, text="IV Model:").pack(side=tk.LEFT, padx=5)
         self.pricing_model_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_pricing_model,
-                                            values=["Leisen-Reimer", "Barone-Adesi Whaley"], state="readonly", style="TCombobox")
+                                               values=["Leisen-Reimer", "Barone-Adesi Whaley"], state="readonly", style="TCombobox")
         self.pricing_model_menu.pack(side=tk.LEFT, padx=5)
+
+        # Mispricing entry field
         tk.Label(selection_and_metrics_frame, text="Mispricing:").pack(side=tk.LEFT, padx=5)
         self.mispricing_var = tk.StringVar(value="0.0")
         self.mispricing_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.mispricing_var, width=10)
         self.mispricing_entry.pack(side=tk.LEFT, padx=5)
+
+        # Max spread entry field
         tk.Label(selection_and_metrics_frame, text="Max Spread:").pack(side=tk.LEFT, padx=5)
         self.spread_filter_var = tk.StringVar(value="0.0")
         self.spread_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.spread_filter_var, width=10)
         self.spread_filter_entry.pack(side=tk.LEFT, padx=5)
+
+        # Strike filter entry field
         tk.Label(selection_and_metrics_frame, text="Strike Filter:").pack(side=tk.LEFT, padx=5)
         self.strike_filter_var = tk.StringVar(value="0.0")
         self.strike_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.strike_filter_var, width=10)
         self.strike_filter_entry.pack(side=tk.LEFT, padx=5)
+
+        # Liquidity filter checkbox
         self.liquidity_filter_var = tk.BooleanVar(value=True)
         self.liquidity_filter_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Liquidity Filter", variable=self.liquidity_filter_var)
         self.liquidity_filter_checkbox.pack(side=tk.LEFT, padx=5)
+
+        # Bid checkbox
         self.bid_var = tk.BooleanVar(value=True)
         self.bid_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Bid", variable=self.bid_var)
         self.bid_checkbox.pack(side=tk.LEFT, padx=5)
+
+        # Ask checkbox
         self.ask_var = tk.BooleanVar(value=True)
         self.ask_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Ask", variable=self.ask_var)
         self.ask_checkbox.pack(side=tk.LEFT, padx=5)
+
+        # Enter button to update the plot
         tk.Button(selection_and_metrics_frame, text="Enter", command=self.update_plot).pack(side=tk.LEFT, padx=5)
 
     def setup_plot(self):
+        """
+        Set up the plot appearance and configuration.
+
+        This method configures the plot's appearance, including setting background colors, grid lines,
+        axis labels, and title.
+        """
         self.ax.set_facecolor('#1c1c1c')
         self.figure.patch.set_facecolor('#1c1c1c')
         self.ax.grid(True, color='#444444')
@@ -127,11 +190,18 @@ class PlotManager:
         self.ax.xaxis.label.set_color('white')
         self.ax.title.set_color('white')
         self.ax.set_ylim(0.0, 0.75)
-        self.ax.set_title(f"{self.ticker}")
+        self.ax.set_title(f"{self.ticker} - {self.selected_date} - {self.option_type.capitalize()}")
         self.ax.set_xlabel("Strike K")
         self.ax.set_ylabel("Implied Volatility")
 
     def update_plot(self):
+        """
+        Update the plot with the latest options data and selected configurations.
+
+        This method filters the options data based on user inputs such as strike range, mispricing,
+        and bid-ask spread. It then calculates implied volatilities using the selected pricing model
+        and plots the results, including midpoints, bid, ask prices, and the fitted model curve.
+        """
         data_dict = self.quote_data
         sorted_data = dict(sorted(data_dict.items()))
 
@@ -299,12 +369,30 @@ class PlotManager:
         self.canvas.draw()
 
     def update_mid_price(self, quote):
+        """
+        Update the mid price of the underlying asset based on live quotes.
+
+        Args:
+            quote (Quote): The latest quote object containing bid and ask prices.
+
+        This method calculates the mid price from the bid and ask prices and updates
+        the underlying asset price accordingly.
+        """
         bid_price = quote.bidPrice
         ask_price = quote.askPrice
         if bid_price is not None and ask_price is not None:
             self.underlying_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
 
     def process_quote(self, quote):
+        """
+        Process incoming quote data and update the internal quote dictionary.
+
+        Args:
+            quote (Quote): The latest quote object containing bid and ask prices.
+
+        This method updates the quote data dictionary with the latest bid, ask, and mid prices
+        for each strike price based on the event symbol.
+        """
         event_symbol = quote.eventSymbol
         bid_price = quote.bidPrice
         ask_price = quote.askPrice
@@ -318,6 +406,16 @@ class PlotManager:
             }
 
     async def stream_live_prices(self, session, subs_list):
+        """
+        Stream live option prices and update the plot in real time.
+
+        Args:
+            session (Session): The Tastytrade session object.
+            subs_list (list): A list of symbols to subscribe to for streaming quotes.
+
+        This method continuously receives live quotes from the DXLinkStreamer, updates the
+        internal quote dictionary, and refreshes the plot at regular intervals.
+        """
         async with DXLinkStreamer(session) as streamer:
             await streamer.subscribe(EventType.QUOTE, subs_list)
             start_time = time.time()
@@ -330,6 +428,16 @@ class PlotManager:
                     start_time = time.time()
 
     async def stream_raw_quotes(self, session, ticker_list):
+        """
+        Stream live quotes for the underlying asset and update the mid price.
+
+        Args:
+            session (Session): The Tastytrade session object.
+            ticker_list (list): A list of ticker symbols to subscribe to for streaming quotes.
+
+        This method continuously receives live quotes for the underlying asset from the DXLinkStreamer,
+        updating the mid price in real time.
+        """
         async with DXLinkStreamer(session) as streamer:
             await streamer.subscribe(EventType.QUOTE, ticker_list)
             while True:
@@ -337,12 +445,33 @@ class PlotManager:
                 self.update_mid_price(quote)
 
     async def start_streamers(self):
+        """
+        Start the streaming tasks for options prices and underlying asset quotes.
+
+        This method creates and runs two asyncio tasks: one for streaming options prices
+        and another for streaming raw quotes of the underlying asset.
+        """
         options_streamer_task = asyncio.create_task(self.stream_live_prices(self.session, self.expiration_to_strikes_map[datetime.strptime(self.selected_date, '%Y-%m-%d').date()][self.option_type]))
         raw_quote_streamer_task = asyncio.create_task(self.stream_raw_quotes(self.session, [self.ticker]))
         
         await asyncio.gather(options_streamer_task, raw_quote_streamer_task)
 
 def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
+    """
+    Open the plot manager to visualize the implied volatility smile.
+
+    Args:
+        ticker (str): The ticker symbol of the underlying asset.
+        session (Session): The Tastytrade session object.
+        expiration_to_strikes_map (dict): Mapping of expiration dates to their corresponding strikes.
+        streamer_to_strike_map (dict): Mapping of streamer symbols to their strike prices.
+        selected_date (str): The selected expiration date.
+        option_type (str): The type of option ('calls' or 'puts').
+        risk_free_rate (float): The risk-free rate used for calculations.
+
+    This function creates a Tkinter root window and initializes the PlotManager
+    to start streaming data and updating the plot in real time.
+    """
     root = tk.Tk()
     plot_manager = PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate)
     

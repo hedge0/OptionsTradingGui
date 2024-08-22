@@ -16,6 +16,13 @@ expiration_dates_list = []
 risk_free_rate = 0.0
 
 def show_login():
+    """
+    Display the login window for the user to enter their credentials.
+    
+    This function creates a GUI window where the user can input their Tastytrade username and password,
+    as well as a FRED API key. It also handles login validation and manages the caching of credentials.
+    If the login is successful, it proceeds to validate the ticker and then shows options for expiration dates and option types.
+    """
     login_window = tk.Tk()
     login_window.title("Login")
     login_window.geometry("300x250")
@@ -39,6 +46,14 @@ def show_login():
     remember_checkbox.pack(pady=5)
 
     def check_credentials():
+        """
+        Validate the user's credentials and initiate a session with Tastytrade.
+        
+        This function checks the user's inputted username and password by attempting to create a session
+        with Tastytrade. If successful, it will cache the credentials if the 'Remember Me' checkbox is selected.
+        Upon successful login, it displays fields for the ticker symbol and FRED API key, and allows the user to validate
+        the ticker symbol and proceed to the options selection.
+        """
         global session, chain
         username = username_entry.get()
         password = password_entry.get()
@@ -69,6 +84,13 @@ def show_login():
             fred_remember_checkbox.pack(pady=5)
 
             def validate_and_show_options():
+                """
+                Validate the ticker symbol and retrieve option chains.
+                
+                This function validates the ticker entered by the user and retrieves the corresponding
+                option chain using the Tastytrade API. It also validates the FRED API key if provided.
+                Upon successful validation, it shows dropdown menus for selecting the expiration date and option type.
+                """
                 global chain, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate
                 ticker = ticker_entry.get()
                 fred_api_key = fred_api_key_entry.get()
@@ -131,6 +153,13 @@ def show_login():
                 option_type_menu.pack(pady=5)
 
                 def proceed_to_plot():
+                    """
+                    Proceed to plot the selected options data.
+                    
+                    This function is called when the user selects an expiration date and option type,
+                    and clicks 'Enter'. It destroys the login window and opens the plot manager with the
+                    selected data.
+                    """
                     selected_date = expiration_var.get()
                     option_type = option_type_var.get()
                     login_window.destroy()
