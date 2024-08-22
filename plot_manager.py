@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta
 import math
+import threading
 import time
 import numpy as np
 from collections import defaultdict
@@ -49,7 +50,7 @@ class PlotManager:
 
         self.create_dropdown_and_button()
         self.setup_plot()
-        self.update_plot()
+
         self.canvas.mpl_connect('scroll_event', lambda event: on_scroll(event, self))
         self.canvas.mpl_connect('motion_notify_event', lambda event: on_mouse_move(event, self))
         self.canvas.mpl_connect('button_press_event', lambda event: on_press(event, self))
@@ -163,7 +164,7 @@ class PlotManager:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Max Bid-Ask Spread.")
             return
         if self.liquidity_filter_var.get():
-            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0}
+            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0 and prices['ask'] != 0.0 and prices['mid'] != 0.0}
         try:
             epsilon_value = float(self.epsilon_var.get())
             if epsilon_value < 0.0:
@@ -328,14 +329,15 @@ class PlotManager:
     async def stream_live_prices(self, session, subs_list):
         async with DXLinkStreamer(session) as streamer:
             await streamer.subscribe(EventType.QUOTE, subs_list)
+            start_time = time.time()
             while True:
                 quote = await streamer.get_event(EventType.QUOTE)
                 self.process_quote(quote)
 
-                # Check if 1 second has passed
                 if time.time() - start_time >= 1:
+                    print(self.underlying_price)
                     self.update_plot()
-                    start_time = time.time()  # Reset the timer
+                    start_time = time.time()
 
     async def stream_raw_quotes(self, session, ticker_list):
         async with DXLinkStreamer(session) as streamer:
@@ -344,10 +346,21 @@ class PlotManager:
                 quote = await streamer.get_event(EventType.QUOTE)
                 self.update_mid_price(quote)
 
+    async def start_streamers(self):
+        options_streamer_task = asyncio.create_task(self.stream_live_prices(self.session, self.expiration_to_strikes_map[datetime.strptime(self.exp_date_var.get(), '%Y-%m-%d').date()][self.type_var.get()]))
+        raw_quote_streamer_task = asyncio.create_task(self.stream_raw_quotes(self.session, [self.ticker]))
+        
+        await asyncio.gather(options_streamer_task, raw_quote_streamer_task)
+
 def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
     root = tk.Tk()
     plot_manager = PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate)
+    
+    def run_asyncio_tasks():
+        asyncio.run(plot_manager.start_streamers())
+
+    stream_thread = threading.Thread(target=run_asyncio_tasks)
+    stream_thread.start()
+
     root.mainloop()
-    # Starting the asynchronous tasks
-    asyncio.run(plot_manager.stream_raw_quotes(session, [plot_manager.ticker]))
-    asyncio.run(plot_manager.stream_live_prices(session,  plot_manager.expiration_to_strikes_map[plot_manager.exp_date_var.get()][plot_manager.type_var.get()]))
+    stream_thread.join()
