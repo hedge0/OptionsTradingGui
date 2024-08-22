@@ -370,5 +370,5 @@ def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_st
     plot_manager = PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate)
     root.mainloop()
     # Starting the asynchronous tasks
-    asyncio.run(plot_manager.stream_raw_quotes(session, ticker_list))
-    asyncio.run(plot_manager.stream_live_prices(session, ticker_list))
+    asyncio.run(plot_manager.stream_raw_quotes(session, [plot_manager.ticker]))
+    asyncio.run(plot_manager.stream_live_prices(session,  plot_manager.expiration_to_strikes_map[plot_manager.exp_date_var.get()][plot_manager.type_var.get()]))
