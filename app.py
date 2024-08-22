@@ -16,11 +16,6 @@ expiration_dates_list = []
 risk_free_rate = 0.0
 
 def show_login():
-    """
-    Display the login window for the user to enter Tastytrade credentials
-    and optionally a FRED API Key. Handles login, ticker validation, and
-    FRED API Key validation, and opens the plot manager if successful.
-    """
     login_window = tk.Tk()
     login_window.title("Login")
     login_window.geometry("300x250")
@@ -44,10 +39,6 @@ def show_login():
     remember_checkbox.pack(pady=5)
 
     def check_credentials():
-        """
-        Check the provided Tastytrade credentials. If valid, proceed to
-        ticker and FRED API Key validation. Save credentials if requested.
-        """
         global session, chain
         username = username_entry.get()
         password = password_entry.get()
@@ -64,7 +55,6 @@ def show_login():
 
             tk.Label(login_window, text="Ticker:").pack(pady=5)
             ticker_entry = tk.Entry(login_window)
-            ticker_entry.insert(0, "SPY")
             ticker_entry.pack(pady=5)
             
             tk.Label(login_window, text="FRED API Key:").pack(pady=5)
@@ -78,11 +68,7 @@ def show_login():
             fred_remember_checkbox = tk.Checkbutton(login_window, text="Remember Me", variable=fred_remember_var)
             fred_remember_checkbox.pack(pady=5)
 
-            def validate_and_open_plot():
-                """
-                Validate the entered ticker and FRED API Key. If both are valid,
-                proceed to open the plot manager with the validated data.
-                """
+            def validate_and_show_options():
                 global chain, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate
                 ticker = ticker_entry.get()
                 fred_api_key = fred_api_key_entry.get()
@@ -131,11 +117,28 @@ def show_login():
                     messagebox.showerror("FRED API Error", f"Invalid FRED API Key: {str(e)}")
                     return
 
-                messagebox.showinfo("Validation Success", f"Both Ticker and FRED API Key validated successfully!\nRisk-Free Rate: {risk_free_rate}%")
-                login_window.destroy()
-                open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate)
+                for widget in login_window.winfo_children():
+                    widget.pack_forget()
 
-            tk.Button(login_window, text="Enter", command=validate_and_open_plot).pack(pady=20)
+                tk.Label(login_window, text="Select Expiration Date:").pack(pady=5)
+                expiration_var = tk.StringVar(value=expiration_dates_list[0])
+                expiration_menu = tk.OptionMenu(login_window, expiration_var, *expiration_dates_list)
+                expiration_menu.pack(pady=5)
+
+                tk.Label(login_window, text="Select Option Type:").pack(pady=5)
+                option_type_var = tk.StringVar(value="calls")
+                option_type_menu = tk.OptionMenu(login_window, option_type_var, "calls", "puts")
+                option_type_menu.pack(pady=5)
+
+                def proceed_to_plot():
+                    selected_date = expiration_var.get()
+                    option_type = option_type_var.get()
+                    login_window.destroy()
+                    open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate)
+
+                tk.Button(login_window, text="Enter", command=proceed_to_plot).pack(pady=20)
+
+            tk.Button(login_window, text="Enter", command=validate_and_show_options).pack(pady=20)
 
         except TastytradeError as e:
             if "invalid_credentials" in str(e):

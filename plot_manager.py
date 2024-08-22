@@ -16,12 +16,13 @@ from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, 
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
 class PlotManager:
-    def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
+    def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
         self.root = root
         self.session = session
         self.expiration_to_strikes_map = expiration_to_strikes_map
         self.streamer_to_strike_map = streamer_to_strike_map
-        self.expiration_dates_list = expiration_dates_list
+        self.selected_date = selected_date
+        self.option_type = option_type
         self.risk_free_rate = risk_free_rate / 100
 
         self.root.title("Implied Volatility Smile Simulation")
@@ -109,16 +110,6 @@ class PlotManager:
         self.liquidity_filter_var = tk.BooleanVar(value=True)
         self.liquidity_filter_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Liquidity Filter", variable=self.liquidity_filter_var)
         self.liquidity_filter_checkbox.pack(side=tk.LEFT, padx=5)
-        tk.Label(selection_and_metrics_frame, text="Exp. Date:").pack(side=tk.LEFT, padx=5)
-        self.exp_date_var = tk.StringVar(value=self.expiration_dates_list[0])
-        self.exp_date_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.exp_date_var, 
-                                        values=self.expiration_dates_list, state="readonly", style="TCombobox")
-        self.exp_date_menu.pack(side=tk.LEFT, padx=5)
-        tk.Label(selection_and_metrics_frame, text="Type:").pack(side=tk.LEFT, padx=5)
-        self.type_var = tk.StringVar(value="calls")
-        self.type_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.type_var, 
-                                    values=["calls", "puts"], state="readonly", style="TCombobox")
-        self.type_menu.pack(side=tk.LEFT, padx=5)
         self.bid_var = tk.BooleanVar(value=True)
         self.bid_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Bid", variable=self.bid_var)
         self.bid_checkbox.pack(side=tk.LEFT, padx=5)
@@ -175,7 +166,7 @@ class PlotManager:
 
         S = self.underlying_price
         current_time = datetime.now()
-        expiration_time =datetime.combine(datetime.strptime(self.exp_date_var.get(), '%Y-%m-%d'), datetime.min.time()) + timedelta(hours=16)
+        expiration_time =datetime.combine(datetime.strptime(self.selected_date, '%Y-%m-%d'), datetime.min.time()) + timedelta(hours=16)
         T = (expiration_time - current_time).total_seconds() / (365 * 24 * 3600)
         r = self.risk_free_rate
 
@@ -186,7 +177,7 @@ class PlotManager:
             else:
                 pricing_model_function = calculate_implied_volatility_baw
             sorted_data[strike] = {
-                price_type: pricing_model_function(price, S, strike, r, T, option_type=self.type_var.get())
+                price_type: pricing_model_function(price, S, strike, r, T, option_type=self.option_type)
                 for price_type, price in prices.items()
             }
 
@@ -266,9 +257,9 @@ class PlotManager:
                 y_mid_value = data_dict[x_value]['mid']
                 
                 if self.selected_pricing_model.get() == "Leisen-Reimer":
-                    option_price = leisen_reimer_tree(S, x_value, T, r, interpolated_y_value, option_type=self.type_var.get())
+                    option_price = leisen_reimer_tree(S, x_value, T, r, interpolated_y_value, option_type=self.option_type)
                 else:
-                    option_price = barone_adesi_whaley_american_option_price(S, x_value, T, r, interpolated_y_value, option_type=self.type_var.get())
+                    option_price = barone_adesi_whaley_american_option_price(S, x_value, T, r, interpolated_y_value, option_type=self.option_type)
                 
                 diff = abs(y_mid_value - option_price)
                 
@@ -335,7 +326,6 @@ class PlotManager:
                 self.process_quote(quote)
 
                 if time.time() - start_time >= 1:
-                    print(self.underlying_price)
                     self.update_plot()
                     start_time = time.time()
 
@@ -347,14 +337,14 @@ class PlotManager:
                 self.update_mid_price(quote)
 
     async def start_streamers(self):
-        options_streamer_task = asyncio.create_task(self.stream_live_prices(self.session, self.expiration_to_strikes_map[datetime.strptime(self.exp_date_var.get(), '%Y-%m-%d').date()][self.type_var.get()]))
+        options_streamer_task = asyncio.create_task(self.stream_live_prices(self.session, self.expiration_to_strikes_map[datetime.strptime(self.selected_date, '%Y-%m-%d').date()][self.option_type]))
         raw_quote_streamer_task = asyncio.create_task(self.stream_raw_quotes(self.session, [self.ticker]))
         
         await asyncio.gather(options_streamer_task, raw_quote_streamer_task)
 
-def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate):
+def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
     root = tk.Tk()
-    plot_manager = PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list, risk_free_rate)
+    plot_manager = PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate)
     
     def run_asyncio_tasks():
         asyncio.run(plot_manager.start_streamers())
