@@ -42,7 +42,7 @@ class PlotManager:
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        self.selected_method = tk.StringVar(value="RBF")
+        self.selected_method = tk.StringVar(value="Hybrid")
         self.selected_objective = tk.StringVar(value="WLS")
         self.ticker = ticker
         self.selected_pricing_model = tk.StringVar(value="Leisen-Reimer")
@@ -118,7 +118,7 @@ class PlotManager:
 
         # Method selection menu
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
-                                        values=["RBF", "RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
+                                        values=["Hybrid", "RBF", "RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
 
         # Objective function selection menu
@@ -306,17 +306,45 @@ class PlotManager:
         }.get(self.selected_method.get())
 
         if self.selected_method.get() == "RBF":
+            # RBF Model
             smoothing = 0.000000000001
-            interpolator = model(np.log(x_normalized), y_mid, epsilon=epsilon_value, smoothing=smoothing)
+            interpolator = rbf_model(np.log(x_normalized), y_mid, epsilon=epsilon_value, smoothing=smoothing)
             fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
             interpolated_y = interpolator(np.log(fine_x_normalized).reshape(-1, 1))
+            
+            # Calculate metrics for RBF
             chi_squared = np.sum((y_mid - interpolator(np.log(x_normalized).reshape(-1, 1))) ** 2)
             avE5 = np.mean(np.abs(y_mid - interpolator(np.log(x_normalized).reshape(-1, 1)))) * 10000
+
+        elif self.selected_method.get() == "Hybrid":
+            # Hybrid Model (average of RBF and RFV)
+            smoothing = 0.000000000001
+            rbf_interpolator = rbf_model(np.log(x_normalized), y_mid, epsilon=epsilon_value, smoothing=smoothing)
+            rfv_params = fit_model(x_normalized, y_mid, y_bid, y_ask, rfv_model, method=self.selected_objective.get())
+
+            fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
+            rbf_interpolated_y = rbf_interpolator(np.log(fine_x_normalized).reshape(-1, 1))
+            rfv_interpolated_y = rfv_model(np.log(fine_x_normalized), rfv_params)
+            
+            # Averaging RBF and RFV
+            interpolated_y = 0.5 * rbf_interpolated_y + 0.5 * rfv_interpolated_y
+            
+            # Calculate metrics based on the averaged model
+            chi_squared_rbf = np.sum((y_mid - rbf_interpolator(np.log(x_normalized).reshape(-1, 1))) ** 2)
+            chi_squared_rfv = np.sum((y_mid - rfv_model(np.log(x_normalized), rfv_params)) ** 2)
+            chi_squared = 0.5 * chi_squared_rbf + 0.5 * chi_squared_rfv
+            
+            avE5_rbf = np.mean(np.abs(y_mid - rbf_interpolator(np.log(x_normalized).reshape(-1, 1)))) * 10000
+            avE5_rfv = np.mean(np.abs(y_mid - rfv_model(np.log(x_normalized), rfv_params))) * 10000
+            avE5 = 0.5 * avE5_rbf + 0.5 * avE5_rfv
+
         else:
+            # Other models like SVI, SLV, RFV, SABR
             params = fit_model(x_normalized, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
             fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
             interpolated_y = model(np.log(fine_x_normalized), params)
             chi_squared, avE5 = compute_metrics(x_normalized, y_mid, model, params)
+
 
         fine_x = np.linspace(np.min(x), np.max(x), 400)
         outliers_indices = []
