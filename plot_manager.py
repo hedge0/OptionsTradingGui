@@ -224,8 +224,6 @@ class PlotManager:
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Max Bid-Ask Spread.")
             return
-        if self.liquidity_filter_var.get():
-            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0 and prices['ask'] != 0.0 and prices['mid'] != 0.0}
         try:
             epsilon_value = float(self.epsilon_var.get())
             if epsilon_value < 0.0:
@@ -233,6 +231,9 @@ class PlotManager:
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Epsilon (0.0 or above).")
             return    
+
+        if self.liquidity_filter_var.get():
+            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0}
 
         S = self.underlying_price
         current_time = datetime.now()
@@ -250,6 +251,9 @@ class PlotManager:
                 price_type: pricing_model_function(price, S, strike, r, T, option_type=self.option_type)
                 for price_type, price in prices.items()
             }
+
+        if self.liquidity_filter_var.get():
+            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['mid'] > 0.005}
 
         strike_prices = np.array(list(sorted_data.keys()))
         if strike_filter_value > 0.0:
