@@ -257,7 +257,7 @@ class PlotManager:
 
         strike_prices = np.array(list(sorted_data.keys()))
         if strike_filter_value > 0.0:
-            x = filter_strikes(strike_prices, np.mean(strike_prices), num_stdev=strike_filter_value)
+            x = filter_strikes(strike_prices, S, num_stdev=strike_filter_value)
         else:
             x = strike_prices
             
