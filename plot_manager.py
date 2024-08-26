@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tastytrade import DXLinkStreamer
 from tastytrade.dxfeed import EventType
-from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, rbf_model, fit_model, compute_metrics, calculate_implied_volatility_lr, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price, leisen_reimer_tree
+from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, rbf_model, fit_model, compute_metrics, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
 class PlotManager:
@@ -45,7 +45,6 @@ class PlotManager:
         self.selected_method = tk.StringVar(value="Hybrid")
         self.selected_objective = tk.StringVar(value="WLS")
         self.ticker = ticker
-        self.selected_pricing_model = tk.StringVar(value="Leisen-Reimer")
         self.press_event = None
         self.quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None})
         self.underlying_price = 0.0
@@ -81,7 +80,6 @@ class PlotManager:
         This method calls Numba-compiled functions with sample data to ensure they are precompiled,
         reducing latency during actual execution.
         """
-        calculate_implied_volatility_lr(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
         calculate_implied_volatility_baw(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
 
     def create_dropdown_and_button(self):
@@ -132,12 +130,6 @@ class PlotManager:
         self.epsilon_var = tk.StringVar(value="0.5")
         self.epsilon_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.epsilon_var, width=10)
         self.epsilon_entry.pack(side=tk.LEFT, padx=5)
-
-        # Pricing model selection menu
-        tk.Label(selection_and_metrics_frame, text="IV Model:").pack(side=tk.LEFT, padx=5)
-        self.pricing_model_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_pricing_model,
-                                               values=["Leisen-Reimer", "Barone-Adesi Whaley"], state="readonly", style="TCombobox")
-        self.pricing_model_menu.pack(side=tk.LEFT, padx=5)
 
         # Mispricing entry field
         tk.Label(selection_and_metrics_frame, text="Mispricing:").pack(side=tk.LEFT, padx=5)
@@ -243,12 +235,8 @@ class PlotManager:
 
         # Process original sorted_data_lr (calculate IVs for bid, ask, and mid prices using the selected pricing model)
         for strike, prices in sorted_data.items():
-            if self.selected_pricing_model.get() == "Leisen-Reimer":
-                pricing_model_function = calculate_implied_volatility_lr
-            else:
-                pricing_model_function = calculate_implied_volatility_baw
             sorted_data[strike] = {
-                price_type: pricing_model_function(price, S, strike, r, T, option_type=self.option_type)
+                price_type: calculate_implied_volatility_baw(price, S, strike, r, T, option_type=self.option_type)
                 for price_type, price in prices.items()
             }
 
@@ -358,12 +346,7 @@ class PlotManager:
                 closest_index = np.argmin(np.abs(fine_x - x_value))
                 interpolated_y_value = interpolated_y[closest_index]
                 y_mid_value = data_dict[x_value]['mid']
-                
-                if self.selected_pricing_model.get() == "Leisen-Reimer":
-                    option_price = leisen_reimer_tree(S, x_value, T, r, interpolated_y_value, option_type=self.option_type)
-                else:
-                    option_price = barone_adesi_whaley_american_option_price(S, x_value, T, r, interpolated_y_value, option_type=self.option_type)
-                
+                option_price = barone_adesi_whaley_american_option_price(S, x_value, T, r, interpolated_y_value, option_type=self.option_type)
                 diff = abs(y_mid_value - option_price)
                 
                 if diff > mispricing_value:
