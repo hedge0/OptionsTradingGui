@@ -90,7 +90,7 @@ def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WRE"):
         y_ask (array-like): Ask prices of the options.
         model (function): The volatility model to be fitted.
         method (str, optional): The method for calculating the objective function.
-                                Options are 'WLS', 'LS', 'RE', 'WRE'. Defaults to "WRE".
+                                Options are 'WLS', 'LS', 'RE'. 
 
     Returns:
         float: The calculated objective value to be minimized.
@@ -108,13 +108,6 @@ def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WRE"):
     elif method == "RE":
         residuals = (model(k, params) - y_mid) / y_mid
         return np.sum(residuals ** 2)
-    elif method == "WRE":
-        spread = y_ask - y_bid
-        epsilon = 1e-8
-        weights = 1 / (spread + epsilon)
-        residuals = (model(k, params) - y_mid) / y_mid
-        weighted_residuals = weights * residuals ** 2
-        return np.sum(weighted_residuals)
     else:
         raise ValueError("Unknown method. Choose 'WLS', 'LS', 'RE', or 'WRE'.")
 
