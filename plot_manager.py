@@ -259,6 +259,8 @@ class PlotManager:
         if len(x) == 0:
             messagebox.showwarning("No Data", "All data points were filtered out. Adjust the spread filter.")
             return
+        if hasattr(self, 'underlying_price_line'):
+            self.underlying_price_line.remove()
         if hasattr(self, 'midpoints') and self.midpoints:
             self.midpoints.remove()
             self.midpoints = None
@@ -357,6 +359,15 @@ class PlotManager:
             self.fit_line.set_visible(True)
         else:
             self.fit_line.set_visible(False)
+
+        self.underlying_price_line = self.ax.axvline(
+            x=self.underlying_price, 
+            color='#add8e6', 
+            linestyle='-', 
+            linewidth=1, 
+            alpha=0.5,
+            label='Underlying Price'
+        )
 
         self.canvas.draw()
 
