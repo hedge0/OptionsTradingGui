@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tastytrade import DXLinkStreamer
 from tastytrade.dxfeed import EventType
-from models import filter_strikes, svi_model, slv_model, rfv_model, sabr_model, rbf_model, fit_model, compute_metrics, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price
+from models import filter_strikes, slv_model, rfv_model, sabr_model, rbf_model, fit_model, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
 class PlotManager:
@@ -98,10 +98,6 @@ class PlotManager:
         self.coord_label = tk.Label(left_frame, text="X: N/A    Y: N/A", fg='black', bg=dropdown_frame.cget('background'))
         self.coord_label.pack(side=tk.LEFT, padx=5)
 
-        # Metrics display
-        self.metrics_text = tk.Label(left_frame, text="χ²: N/A    avE5: N/A bps", fg='black', bg=dropdown_frame.cget('background'))
-        self.metrics_text.pack(side=tk.LEFT, padx=10)
-
         right_frame = tk.Frame(dropdown_frame)
         right_frame.pack(side=tk.RIGHT, anchor=tk.E)
         metrics_frame = tk.Frame(right_frame)
@@ -116,7 +112,7 @@ class PlotManager:
 
         # Method selection menu
         self.method_menu = ttk.Combobox(selection_and_metrics_frame, textvariable=self.selected_method, 
-                                        values=["Hybrid", "RBF", "RFV", "SVI", "SLV", "SABR"], state="readonly", style="TCombobox")
+                                        values=["Hybrid", "RBF", "RFV", "SLV", "SABR"], state="readonly", style="TCombobox")
         self.method_menu.pack(side=tk.LEFT, padx=5)
 
         # Objective function selection menu
@@ -290,7 +286,6 @@ class PlotManager:
         x_normalized = x_normalized + 0.5
 
         model = {
-            "SVI": svi_model,
             "SLV": slv_model,
             "RFV": rfv_model,
             "SABR": sabr_model,
@@ -303,41 +298,23 @@ class PlotManager:
             interpolator = rbf_model(np.log(x_normalized), y_mid, epsilon=epsilon_value, smoothing=smoothing)
             fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
             interpolated_y = interpolator(np.log(fine_x_normalized).reshape(-1, 1))
-            
-            # Calculate metrics for RBF
-            chi_squared = np.sum((y_mid - interpolator(np.log(x_normalized).reshape(-1, 1))) ** 2)
-            avE5 = np.mean(np.abs(y_mid - interpolator(np.log(x_normalized).reshape(-1, 1)))) * 10000
         elif self.selected_method.get() == "Hybrid":
-            # Hybrid Model (average of RBF, RFV, and SABR with specified weights)
+            # Hybrid Model (average of RBF and RFV with specified weights)
             smoothing = 0.000000000001
             rbf_interpolator = rbf_model(np.log(x_normalized), y_mid, epsilon=epsilon_value, smoothing=smoothing)
             rfv_params = fit_model(x_normalized, y_mid, y_bid, y_ask, rfv_model, method=self.selected_objective.get())
-            sabr_params = fit_model(x_normalized, y_mid, y_bid, y_ask, sabr_model, method=self.selected_objective.get())
 
             fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
             rbf_interpolated_y = rbf_interpolator(np.log(fine_x_normalized).reshape(-1, 1))
             rfv_interpolated_y = rfv_model(np.log(fine_x_normalized), rfv_params)
-            sabr_interpolated_y = sabr_model(np.log(fine_x_normalized), sabr_params)
             
-            # Weighted Averaging: RFV 50%, RBF 15%, SABR 35%
-            interpolated_y = 0.5 * rfv_interpolated_y + 0.15 * rbf_interpolated_y + 0.35 * sabr_interpolated_y
-            
-            # Calculate metrics based on the weighted averaged model
-            chi_squared_rbf = np.sum((y_mid - rbf_interpolator(np.log(x_normalized).reshape(-1, 1))) ** 2)
-            chi_squared_rfv = np.sum((y_mid - rfv_model(np.log(x_normalized), rfv_params)) ** 2)
-            chi_squared_sabr = np.sum((y_mid - sabr_model(np.log(x_normalized), sabr_params)) ** 2)
-            chi_squared = 0.5 * chi_squared_rfv + 0.15 * chi_squared_rbf + 0.35 * chi_squared_sabr
-            
-            avE5_rbf = np.mean(np.abs(y_mid - rbf_interpolator(np.log(x_normalized).reshape(-1, 1)))) * 10000
-            avE5_rfv = np.mean(np.abs(y_mid - rfv_model(np.log(x_normalized), rfv_params))) * 10000
-            avE5_sabr = np.mean(np.abs(y_mid - sabr_model(np.log(x_normalized), sabr_params))) * 10000
-            avE5 = 0.5 * avE5_rfv + 0.15 * avE5_rbf + 0.35 * avE5_sabr
+            # Weighted Averaging: RFV 70%, RBF 30%
+            interpolated_y = 0.70 * rfv_interpolated_y + 0.30 * rbf_interpolated_y
         else:
-            # Other models like SVI, SLV, RFV, SABR
+            # Other models like SLV, RFV, SABR
             params = fit_model(x_normalized, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
             fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
             interpolated_y = model(np.log(fine_x_normalized), params)
-            chi_squared, avE5 = compute_metrics(x_normalized, y_mid, model, params)
 
         fine_x = np.linspace(np.min(x), np.max(x), 400)
         outliers_indices = []
@@ -352,7 +329,6 @@ class PlotManager:
                 if diff > mispricing_value:
                     outliers_indices.append(i)
 
-        self.metrics_text.config(text=f"χ²: {chi_squared:.4f}    avE5: {avE5:.2f} bps")
         self.midpoints = self.ax.scatter(x, y_mid, color='red', s=20, label="Midpoint")
 
         if outliers_indices:
