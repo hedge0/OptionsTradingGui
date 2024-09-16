@@ -4,20 +4,6 @@ from scipy.interpolate import RBFInterpolator
 from math import log, sqrt, exp
 from numba import njit
 
-def svi_model(k, params):
-    """
-    SVI Model function.
-
-    Args:
-        k (float or array-like): Log-moneyness of the option.
-        params (list): Parameters [a, b, rho, m, sigma] for the SVI model.
-
-    Returns:
-        float or array-like: The SVI model value for the given log-moneyness.
-    """
-    a, b, rho, m, sigma = params
-    return a + b * (rho * (k - m) + np.sqrt((k - m) ** 2 + sigma ** 2))
-
 def slv_model(k, params):
     """
     SLV Model function.
@@ -127,10 +113,7 @@ def fit_model(x, y_mid, y_bid, y_ask, model, method="WRE"):
         list: The fitted model parameters.
     """
     k = np.log(x)
-    if model == svi_model:
-        initial_guess = [0.01, 0.5, -0.3, 0.0, 0.2]
-        bounds = [(0, 1), (0, 1), (-1, 1), (-1, 1), (0.01, 1)]
-    elif model == rbf_model:
+    if model == rbf_model:
         rbf = rbf_model(k, y_mid)
         return rbf
     else:
@@ -139,27 +122,6 @@ def fit_model(x, y_mid, y_bid, y_ask, model, method="WRE"):
     
     result = minimize(objective_function, initial_guess, args=(k, y_mid, y_bid, y_ask, model, method), method='L-BFGS-B', bounds=bounds)
     return result.x
-
-def compute_metrics(x, y_mid, model, params):
-    """
-    Compute the metrics for the model fit.
-
-    Args:
-        x (array-like): Strikes of the options.
-        y_mid (array-like): Mid prices of the options.
-        model (function): The volatility model used.
-        params (list): The fitted parameters for the model.
-
-    Returns:
-        tuple: chi_squared and avE5 metrics.
-    """
-    k = np.log(x)
-    y_fit = model(k, params)
-    
-    chi_squared = np.sum((y_mid - y_fit) ** 2)
-    avE5 = np.mean(np.abs(y_mid - y_fit)) * 10000
-    
-    return chi_squared, avE5
 
 def filter_strikes(x, S, num_stdev=1.25, two_sigma_move=False):
     """
