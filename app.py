@@ -22,15 +22,13 @@ def show_initial_window():
     """
     initial_window = tk.Tk()
     initial_window.title("Select Platform")
-    initial_window.geometry("300x250")  # Adjusted height to accommodate extra widgets
+    initial_window.geometry("300x250")
 
-    # Platform Selection
     tk.Label(initial_window, text="Select Platform:").pack(pady=5)
     platform_var = tk.StringVar(value="TastyTrade")
     platform_menu = tk.OptionMenu(initial_window, platform_var, "TastyTrade")
     platform_menu.pack(pady=5)
 
-    # FRED API Key Entry
     tk.Label(initial_window, text="FRED API Key:").pack(pady=5)
     fred_api_key_entry = tk.Entry(initial_window)
     fred_api_key_entry.pack(pady=5)
@@ -47,18 +45,15 @@ def show_initial_window():
         fred_api_key = fred_api_key_entry.get()
         selected_platform = platform_var.get()
 
-        # Validate FRED API Key
         try:
             fred = Fred(api_key=fred_api_key)
             sofr_data = fred.get_series('SOFR')
             risk_free_rate = sofr_data.iloc[-1]
 
             if fred_remember_var.get():
-                # Update cached credentials with FRED API key
                 save_cached_credentials(config.get('TASTYTRADE_USERNAME'), config.get('TASTYTRADE_PASSWORD'), fred_api_key)
 
             if selected_platform == "TastyTrade":
-                # Clear the window and show login elements
                 show_login(initial_window)
         except Exception as e:
             messagebox.showerror("FRED API Error", f"Invalid FRED API Key: {str(e)}")
@@ -76,7 +71,6 @@ def show_login(window):
     It handles login validation and manages the caching of credentials.
     Upon successful login, it proceeds to validate the ticker and then shows options for expiration dates and option types.
     """
-    # Clear the window
     for widget in window.winfo_children():
         widget.destroy()
 
@@ -138,29 +132,25 @@ def show_ticker_entry(window):
     Display the ticker entry field and the 'Search' button.
     After successful validation, display expiration date and option type selection below.
     """
-    # Clear the window
     for widget in window.winfo_children():
         widget.destroy()
 
     window.title("Ticker Entry")
-    window.geometry("300x400")  # Adjusted height to accommodate additional widgets
+    window.geometry("300x400")
 
     tk.Label(window, text="Ticker:").pack(pady=5)
     ticker_entry = tk.Entry(window)
     ticker_entry.pack(pady=5)
 
-    # Create the dynamic widgets frame but do not pack it yet
     dynamic_widgets_frame = tk.Frame(window)
 
-    # Pack the 'Search' button above the dynamic widgets frame
     tk.Button(
         window,
         text="Search",
         command=lambda: validate_ticker(window, ticker_entry, dynamic_widgets_frame)
     ).pack(pady=20)
 
-    # Now pack the dynamic widgets frame after the 'Search' button with extra padding
-    dynamic_widgets_frame.pack(pady=(40, 0))  # Increased pady for more space
+    dynamic_widgets_frame.pack(pady=(40, 0))
 
 def validate_ticker(window, ticker_entry, dynamic_widgets_frame):
     """
@@ -170,7 +160,6 @@ def validate_ticker(window, ticker_entry, dynamic_widgets_frame):
     global chain, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list
     ticker = ticker_entry.get()
 
-    # Clear previous dynamic widgets if any
     for widget in dynamic_widgets_frame.winfo_children():
         widget.destroy()
 
@@ -199,7 +188,6 @@ def validate_ticker(window, ticker_entry, dynamic_widgets_frame):
                 }
                 expiration_dates_list.append(expiration.expiration_date)
 
-            # Now, display expiration date and option type selection below the ticker entry
             show_expiration_and_option_type_selection(dynamic_widgets_frame, ticker, window)
     except TastytradeError as e:
         if "record_not_found" in str(e):
@@ -213,8 +201,6 @@ def show_expiration_and_option_type_selection(frame, ticker, window):
     """
     Display the expiration date and option type selection below the ticker entry.
     """
-    # Do not clear the window; add widgets to the provided frame
-
     tk.Label(frame, text="Select Expiration Date:").pack(pady=5)
     expiration_var = tk.StringVar(value=expiration_dates_list[0])
     expiration_menu = tk.OptionMenu(frame, expiration_var, *expiration_dates_list)
@@ -225,7 +211,6 @@ def show_expiration_and_option_type_selection(frame, ticker, window):
     option_type_menu = tk.OptionMenu(frame, option_type_var, "calls", "puts")
     option_type_menu.pack(pady=5)
 
-    # Add an 'Enter' button
     tk.Button(
         frame,
         text="Enter",
@@ -234,7 +219,7 @@ def show_expiration_and_option_type_selection(frame, ticker, window):
         )
     ).pack(pady=20)
 
-def proceed_to_plot(window, ticker, selected_date, option_type):
+def proceed_to_plot(ticker, selected_date, option_type):
     """
     Proceed to plot the selected options data.
 
@@ -242,7 +227,6 @@ def proceed_to_plot(window, ticker, selected_date, option_type):
     and clicks 'Enter'. It destroys the window and opens the plot manager with the
     selected data.
     """
-    window.destroy()
     open_plot_manager(
         ticker,
         session,
