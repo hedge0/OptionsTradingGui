@@ -82,9 +82,6 @@ class Tastytrade:
         for widget in self.window.winfo_children():
             widget.destroy()
 
-        self.window.title("Login")
-        self.window.geometry("300x250")
-
         tk.Label(self.window, text="Username:").pack(pady=5)
         username_entry = tk.Entry(self.window)
         username_entry.pack(pady=5)
@@ -142,7 +139,6 @@ class Tastytrade:
         for widget in self.window.winfo_children():
             widget.destroy()
 
-        self.window.title("Ticker Entry")
         self.window.geometry("300x400")
 
         tk.Label(self.window, text="Ticker:").pack(pady=5)
