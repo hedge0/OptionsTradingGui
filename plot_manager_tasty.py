@@ -15,7 +15,7 @@ from tastytrade.dxfeed import EventType
 from models import filter_strikes, slv_model, rfv_model, sabr_model, rbf_model, fit_model, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
-class PlotManager:
+class PlotManagerTasty:
     def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
         """
         Initialize the PlotManager class.
@@ -483,7 +483,7 @@ class PlotManager:
         for task in self.tasks:
             task.cancel()
 
-def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
+def open_plot_manager_tasty(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
     """
     Open the plot manager to visualize the implied volatility smile.
 
@@ -500,7 +500,7 @@ def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_st
     to start streaming data and updating the plot in real time.
     """
     root = tk.Toplevel()
-    plot_manager = PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate)
+    plot_manager = PlotManagerTasty(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate)
     
     def run_asyncio_tasks():
         asyncio.run(plot_manager.start_streamers())

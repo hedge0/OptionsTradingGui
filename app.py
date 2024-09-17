@@ -5,7 +5,7 @@ from tastytrade.utils import TastytradeError
 from tastytrade.instruments import NestedOptionChain
 from fredapi import Fred
 from credential_manager import load_cached_credentials, save_cached_credentials
-from plot_manager import open_plot_manager
+from plot_manager_tasty import open_plot_manager_tasty
 
 config = load_cached_credentials()
 risk_free_rate = 0.0
@@ -233,7 +233,7 @@ class Tastytrade:
         and clicks 'Enter'. It destroys the window and opens the plot manager with the
         selected data.
         """
-        open_plot_manager(
+        open_plot_manager_tasty(
             ticker,
             self.session,
             self.expiration_to_strikes_map,
