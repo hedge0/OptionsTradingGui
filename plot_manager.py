@@ -499,7 +499,7 @@ def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_st
     This function creates a Tkinter root window and initializes the PlotManager
     to start streaming data and updating the plot in real time.
     """
-    root = tk.Tk()
+    root = tk.Toplevel()
     plot_manager = PlotManager(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate)
     
     def run_asyncio_tasks():
