@@ -37,14 +37,14 @@ class PlotManagerTasty:
         self.selected_date = selected_date
         self.option_type = option_type
         self.risk_free_rate = risk_free_rate / 100
+        self.ticker = ticker
 
-        self.root.title("Implied Volatility Smile Simulation")
+        self.root.title(f"{self.ticker} - {self.selected_date} - {self.option_type.capitalize()}")
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.selected_method = tk.StringVar(value="Hybrid")
         self.selected_objective = tk.StringVar(value="WLS")
-        self.ticker = ticker
         self.press_event = None
         self.quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None})
         self.underlying_price = 0.0
