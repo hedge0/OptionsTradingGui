@@ -135,34 +135,44 @@ def check_credentials(window, username_entry, password_entry, remember_var):
 
 def show_ticker_entry(window):
     """
-    Display the ticker entry field.
-
-    This function clears the window and adds a widget for the user to input the ticker symbol.
+    Display the ticker entry field and the 'Search' button.
+    After successful validation, display expiration date and option type selection below.
     """
     # Clear the window
     for widget in window.winfo_children():
         widget.destroy()
 
+    window.title("Ticker Entry")
+    window.geometry("300x400")  # Adjusted height to accommodate additional widgets
+
     tk.Label(window, text="Ticker:").pack(pady=5)
     ticker_entry = tk.Entry(window)
     ticker_entry.pack(pady=5)
 
+    # Create the dynamic widgets frame but do not pack it yet
+    dynamic_widgets_frame = tk.Frame(window)
+
+    # Pack the 'Search' button above the dynamic widgets frame
     tk.Button(
         window,
-        text="Enter",
-        command=lambda: validate_and_show_options(window, ticker_entry)
+        text="Search",
+        command=lambda: validate_ticker(window, ticker_entry, dynamic_widgets_frame)
     ).pack(pady=20)
 
-def validate_and_show_options(window, ticker_entry):
+    # Now pack the dynamic widgets frame after the 'Search' button with extra padding
+    dynamic_widgets_frame.pack(pady=(40, 0))  # Increased pady for more space
+
+def validate_ticker(window, ticker_entry, dynamic_widgets_frame):
     """
     Validate the ticker symbol and retrieve option chains.
-
-    This function validates the ticker entered by the user and retrieves the corresponding
-    option chain using the Tastytrade API.
-    Upon successful validation, it shows dropdown menus for selecting the expiration date and option type.
+    If successful, display expiration date and option type selection below.
     """
     global chain, expiration_to_strikes_map, streamer_to_strike_map, expiration_dates_list
     ticker = ticker_entry.get()
+
+    # Clear previous dynamic widgets if any
+    for widget in dynamic_widgets_frame.winfo_children():
+        widget.destroy()
 
     try:
         chain = NestedOptionChain.get_chain(session, ticker)
@@ -189,6 +199,8 @@ def validate_and_show_options(window, ticker_entry):
                 }
                 expiration_dates_list.append(expiration.expiration_date)
 
+            # Now, display expiration date and option type selection below the ticker entry
+            show_expiration_and_option_type_selection(dynamic_widgets_frame, ticker, window)
     except TastytradeError as e:
         if "record_not_found" in str(e):
             messagebox.showerror("Validation Failed", f"Invalid ticker symbol: {ticker}. Please check and try again.")
@@ -197,31 +209,25 @@ def validate_and_show_options(window, ticker_entry):
             messagebox.showerror("Validation Failed", f"An error occurred: {str(e)}")
             return
 
-    show_expiration_and_option_type_selection(window, ticker)
-
-def show_expiration_and_option_type_selection(window, ticker):
+def show_expiration_and_option_type_selection(frame, ticker, window):
     """
-    Display the expiration date and option type selection.
-
-    This function clears the window and adds dropdown menus for the user to select the expiration date
-    and option type (calls or puts).
+    Display the expiration date and option type selection below the ticker entry.
     """
-    # Clear the window
-    for widget in window.winfo_children():
-        widget.destroy()
+    # Do not clear the window; add widgets to the provided frame
 
-    tk.Label(window, text="Select Expiration Date:").pack(pady=5)
+    tk.Label(frame, text="Select Expiration Date:").pack(pady=5)
     expiration_var = tk.StringVar(value=expiration_dates_list[0])
-    expiration_menu = tk.OptionMenu(window, expiration_var, *expiration_dates_list)
+    expiration_menu = tk.OptionMenu(frame, expiration_var, *expiration_dates_list)
     expiration_menu.pack(pady=5)
 
-    tk.Label(window, text="Select Option Type:").pack(pady=5)
+    tk.Label(frame, text="Select Option Type:").pack(pady=5)
     option_type_var = tk.StringVar(value="calls")
-    option_type_menu = tk.OptionMenu(window, option_type_var, "calls", "puts")
+    option_type_menu = tk.OptionMenu(frame, option_type_var, "calls", "puts")
     option_type_menu.pack(pady=5)
 
+    # Add an 'Enter' button
     tk.Button(
-        window,
+        frame,
         text="Enter",
         command=lambda: proceed_to_plot(
             window, ticker, expiration_var.get(), option_type_var.get()
