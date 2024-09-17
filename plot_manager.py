@@ -73,6 +73,9 @@ class PlotManager:
 
         self.precompile_numba_functions()
 
+        # Add stop_event for graceful shutdown
+        self.stop_event = asyncio.Event()
+
     def precompile_numba_functions(self):
         """
         Precompile Numba functions to improve performance.
@@ -422,13 +425,16 @@ class PlotManager:
         async with DXLinkStreamer(session) as streamer:
             await streamer.subscribe(EventType.QUOTE, subs_list)
             start_time = time.time()
-            while True:
-                quote = await streamer.get_event(EventType.QUOTE)
-                self.process_quote(quote)
+            try:
+                while not self.stop_event.is_set():
+                    quote = await streamer.get_event(EventType.QUOTE)
+                    self.process_quote(quote)
 
-                if time.time() - start_time >= 1:
-                    self.update_plot()
-                    start_time = time.time()
+                    if time.time() - start_time >= 1:
+                        self.update_plot()
+                        start_time = time.time()
+            except asyncio.CancelledError:
+                pass
 
     async def stream_raw_quotes(self, session, ticker_list):
         """
@@ -443,9 +449,12 @@ class PlotManager:
         """
         async with DXLinkStreamer(session) as streamer:
             await streamer.subscribe(EventType.QUOTE, ticker_list)
-            while True:
-                quote = await streamer.get_event(EventType.QUOTE)
-                self.update_mid_price(quote)
+            try:
+                while not self.stop_event.is_set():
+                    quote = await streamer.get_event(EventType.QUOTE)
+                    self.update_mid_price(quote)
+            except asyncio.CancelledError:
+                pass
 
     async def start_streamers(self):
         """
@@ -454,10 +463,25 @@ class PlotManager:
         This method creates and runs two asyncio tasks: one for streaming options prices
         and another for streaming raw quotes of the underlying asset.
         """
-        options_streamer_task = asyncio.create_task(self.stream_live_prices(self.session, self.expiration_to_strikes_map[datetime.strptime(self.selected_date, '%Y-%m-%d').date()][self.option_type]))
-        raw_quote_streamer_task = asyncio.create_task(self.stream_raw_quotes(self.session, [self.ticker]))
-        
-        await asyncio.gather(options_streamer_task, raw_quote_streamer_task)
+        self.tasks = [
+            asyncio.create_task(self.stream_live_prices(self.session, self.expiration_to_strikes_map[datetime.strptime(self.selected_date, '%Y-%m-%d').date()][self.option_type])),
+            asyncio.create_task(self.stream_raw_quotes(self.session, [self.ticker]))
+        ]
+        try:
+            await asyncio.gather(*self.tasks)
+        except asyncio.CancelledError:
+            pass
+
+    def stop(self):
+        """
+        Stop the streaming tasks and close the streamers.
+
+        This method sets the stop event, cancels the asyncio tasks, and ensures
+        that all streamers are properly closed.
+        """
+        self.stop_event.set()
+        for task in self.tasks:
+            task.cancel()
 
 def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
     """
@@ -484,5 +508,10 @@ def open_plot_manager(ticker, session, expiration_to_strikes_map, streamer_to_st
     stream_thread = threading.Thread(target=run_asyncio_tasks)
     stream_thread.start()
 
+    def on_closing():
+        plot_manager.stop()
+        root.destroy()
+
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
     stream_thread.join()
