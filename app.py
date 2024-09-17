@@ -215,7 +215,7 @@ def show_expiration_and_option_type_selection(frame, ticker, window):
         frame,
         text="Enter",
         command=lambda: proceed_to_plot(
-            window, ticker, expiration_var.get(), option_type_var.get()
+            ticker, expiration_var.get(), option_type_var.get()
         )
     ).pack(pady=20)
 
