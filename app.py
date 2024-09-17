@@ -16,7 +16,7 @@ def show_initial_window():
     Hitting Enter validates the FRED API key and proceeds to the login elements.
     """
     initial_window = tk.Tk()
-    initial_window.title("Select Platform")
+    initial_window.title("App Manager")
     initial_window.geometry("300x250")
 
     tk.Label(initial_window, text="Select Platform:").pack(pady=5)
