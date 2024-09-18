@@ -202,6 +202,9 @@ class Tastytrade:
         try:
             self.chain = NestedOptionChain.get_chain(self.session, ticker)
 
+            for widget in dynamic_widgets_frame.winfo_children():
+                widget.destroy()
+
             if self.chain is not None:
                 self.expiration_to_strikes_map = {}
                 self.streamer_to_strike_map = {}
@@ -226,6 +229,9 @@ class Tastytrade:
 
                 self.show_expiration_and_option_type_selection(dynamic_widgets_frame, ticker)
         except TastytradeError as e:
+            for widget in dynamic_widgets_frame.winfo_children():
+                widget.destroy()
+        
             if "record_not_found" in str(e):
                 messagebox.showerror("Validation Failed", f"Invalid ticker symbol: {ticker}. Please check and try again.")
                 return
@@ -237,9 +243,6 @@ class Tastytrade:
         """
         Display the expiration date and option type selection below the ticker entry.
         """
-        for widget in frame.winfo_children():
-            widget.destroy()
-
         tk.Label(frame, text="Select Expiration Date:").pack(pady=5)
         expiration_var = tk.StringVar(value=self.expiration_dates_list[0])
         expiration_menu = tk.OptionMenu(frame, expiration_var, *self.expiration_dates_list)
@@ -391,10 +394,14 @@ class Schwab:
 
         try:
             resp = await self.session.get_option_expiration_chain(ticker)
+
+            for widget in dynamic_widgets_frame.winfo_children():
+                widget.destroy()
+            
             assert resp.status_code == httpx.codes.OK
             expirations = resp.json()
 
-            if expirations is not None:
+            if expirations is not None and expirations["expirationList"]:
                 self.expiration_dates_list = []
 
                 for expiration in expirations["expirationList"]:
@@ -403,16 +410,18 @@ class Schwab:
                 self.show_expiration_and_option_type_selection(dynamic_widgets_frame, ticker)
             else:
                 messagebox.showerror("Validation Failed", f"Invalid ticker symbol: {ticker}. Please check and try again.")
+                return
         except Exception as e:
+            for widget in dynamic_widgets_frame.winfo_children():
+                widget.destroy()
+        
             messagebox.showerror("Validation Failed", f"An error occurred: {str(e)}")
+            return
 
     def show_expiration_and_option_type_selection(self, frame, ticker):
         """
         Display the expiration date and option type selection below the ticker entry.
         """
-        for widget in frame.winfo_children():
-            widget.destroy()
-        
         tk.Label(frame, text="Select Expiration Date:").pack(pady=5)
         expiration_var = tk.StringVar(value=self.expiration_dates_list[0])
         expiration_menu = tk.OptionMenu(frame, expiration_var, *self.expiration_dates_list)
