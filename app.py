@@ -1,14 +1,18 @@
 import tkinter as tk
 from tkinter import messagebox
+import httpx
 from tastytrade import Session
 from tastytrade.utils import TastytradeError
 from tastytrade.instruments import NestedOptionChain
 from fredapi import Fred
 from schwab.auth import easy_client
+
 import nest_asyncio
+import threading
+import asyncio
+
 nest_asyncio.apply()
 
-import asyncio
 from credential_manager import load_cached_credentials, save_cached_credentials
 from plot_manager_tasty import open_plot_manager_tasty
 
@@ -75,8 +79,6 @@ def show_initial_window():
     tk.Button(initial_window, text="Enter", command=proceed_to_login).pack(pady=20)
 
     initial_window.mainloop()
-
-
 
 
 
@@ -336,6 +338,11 @@ class Schwab:
         secret = secret_entry.get()
         callback_url = callback_url_entry.get()
 
+        def run_async_in_thread(async_func, *args):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(async_func(*args))
+
         try:
             self.session = easy_client(
                 token_path='token.json',
@@ -355,8 +362,43 @@ class Schwab:
                     schwab_callback_url=callback_url
                 )
 
-        except Exception  as e:
+            # Run the async method in a separate thread
+            threading.Thread(target=run_async_in_thread, args=(self.show_ticker_entry,)).start()
+
+        except TastytradeError as e:
             messagebox.showerror("Login Failed", f"An error occurred: {str(e)}")
 
+    async def show_ticker_entry(self):
+        """
+        Display the ticker entry field and the 'Search' button.
+        After successful validation, display expiration date and option type selection below.
+        """
+        for widget in self.window.winfo_children():
+            widget.destroy()
+
+        self.window.geometry("300x400")
+
+        tk.Label(self.window, text="Ticker:").pack(pady=5)
+        ticker_entry = tk.Entry(self.window)
+        ticker_entry.pack(pady=5)
+
+        dynamic_widgets_frame = tk.Frame(self.window)
+
+        # Fetch option expiration chain
+        resp = await self.session.get_option_expiration_chain('AAPL')
+        assert resp.status_code == httpx.codes.OK
+        expirations = resp.json()
+
+        expiration_dates_list = []
+
+        if expirations is not None:
+            for expiration in expirations["expirationList"]:
+                expiration_dates_list.append(expiration["expirationDate"])
+
+        print(expiration_dates_list)
+
+        dynamic_widgets_frame.pack(pady=(40, 0))
+
+
 if __name__ == "__main__":
-    asyncio.run(show_initial_window())
+    show_initial_window()
