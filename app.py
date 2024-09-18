@@ -21,7 +21,7 @@ def show_initial_window():
 
     tk.Label(initial_window, text="Select Platform:").pack(pady=5)
     platform_var = tk.StringVar(value="TastyTrade")
-    platform_menu = tk.OptionMenu(initial_window, platform_var, "TastyTrade")
+    platform_menu = tk.OptionMenu(initial_window, platform_var, "TastyTrade", "Schwab")
     platform_menu.pack(pady=5)
 
     tk.Label(initial_window, text="FRED API Key:").pack(pady=5)
@@ -51,6 +51,9 @@ def show_initial_window():
             if selected_platform == "TastyTrade":
                 tastytrade_instance = Tastytrade(window=initial_window, risk_free_rate=risk_free_rate)
                 tastytrade_instance.show_login()
+            elif selected_platform == "Schwab":
+                schwab_instance = Schwab(window=initial_window, risk_free_rate=risk_free_rate)
+                schwab_instance.show_login()
             else:
                 messagebox.showerror("Platform Error", f"The selected platform '{selected_platform}' is not supported.")
         except Exception as e:
@@ -238,6 +241,49 @@ class Tastytrade:
             option_type,
             self.risk_free_rate
         )
+
+class Schwab:
+    def __init__(self, window, risk_free_rate):
+        self.window = window
+        self.risk_free_rate = risk_free_rate
+        # No definitions for now
+
+    def show_login(self):
+        """
+        Display the login elements for Schwab on the given window for the user to enter their credentials.
+
+        This function adds widgets to the provided window where the user can input their Schwab API Key,
+        Secret, and Callback URL. It handles credential caching if 'Remember Me' is checked.
+        """
+        for widget in self.window.winfo_children():
+            widget.destroy()
+
+        self.window.geometry("300x300")
+
+        tk.Label(self.window, text="API Key:").pack(pady=5)
+        api_key_entry = tk.Entry(self.window)
+        api_key_entry.pack(pady=5)
+
+        if config.get('SCHWAB_API_KEY'):
+            api_key_entry.insert(0, config['SCHWAB_API_KEY'])
+
+        tk.Label(self.window, text="Secret:").pack(pady=5)
+        secret_entry = tk.Entry(self.window, show="*")
+        secret_entry.pack(pady=5)
+
+        if config.get('SCHWAB_SECRET'):
+            secret_entry.insert(0, config['SCHWAB_SECRET'])
+
+        tk.Label(self.window, text="Callback URL:").pack(pady=5)
+        callback_url_entry = tk.Entry(self.window)
+        callback_url_entry.pack(pady=5)
+
+        if config.get('SCHWAB_CALLBACK_URL'):
+            callback_url_entry.insert(0, config['SCHWAB_CALLBACK_URL'])
+
+        remember_var = tk.BooleanVar(value=False)
+        remember_checkbox = tk.Checkbutton(self.window, text="Remember Me", variable=remember_var)
+        remember_checkbox.pack(pady=5)
 
 if __name__ == "__main__":
     show_initial_window()
