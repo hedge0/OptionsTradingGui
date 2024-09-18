@@ -199,9 +199,6 @@ class Tastytrade:
         """
         ticker = ticker_entry.get()
 
-        for widget in dynamic_widgets_frame.winfo_children():
-            widget.destroy()
-
         try:
             self.chain = NestedOptionChain.get_chain(self.session, ticker)
 
@@ -240,6 +237,9 @@ class Tastytrade:
         """
         Display the expiration date and option type selection below the ticker entry.
         """
+        for widget in frame.winfo_children():
+            widget.destroy()
+
         tk.Label(frame, text="Select Expiration Date:").pack(pady=5)
         expiration_var = tk.StringVar(value=self.expiration_dates_list[0])
         expiration_menu = tk.OptionMenu(frame, expiration_var, *self.expiration_dates_list)
@@ -372,24 +372,22 @@ class Schwab:
         tk.Button(
             self.window,
             text="Search",
-            command=lambda: self.run_async_validation(ticker_entry.get(), dynamic_widgets_frame)
+            command=lambda: self.run_async_validation(ticker_entry, dynamic_widgets_frame)
         ).pack(pady=20)
 
         dynamic_widgets_frame.pack(pady=(40, 0))
 
-    def run_async_validation(self, ticker, dynamic_widgets_frame):
+    def run_async_validation(self, ticker_entry, dynamic_widgets_frame):
         """
         Run the asynchronous ticker validation using `asyncio.run_coroutine_threadsafe`.
         """
-        future = asyncio.run_coroutine_threadsafe(self.validate_ticker(ticker, dynamic_widgets_frame), loop)
-        future.add_done_callback(lambda f: print(f.result()) if f.exception() is None else print(f.exception()))
+        asyncio.run_coroutine_threadsafe(self.validate_ticker(ticker_entry, dynamic_widgets_frame), loop)
 
-    async def validate_ticker(self, ticker, dynamic_widgets_frame):
+    async def validate_ticker(self, ticker_entry, dynamic_widgets_frame):
         """
         Validate the ticker symbol and retrieve option chains.
         """
-        for widget in dynamic_widgets_frame.winfo_children():
-            widget.destroy()
+        ticker = ticker_entry.get()
 
         try:
             resp = await self.session.get_option_expiration_chain(ticker)
@@ -402,11 +400,30 @@ class Schwab:
                 for expiration in expirations["expirationList"]:
                     self.expiration_dates_list.append(expiration["expirationDate"])
 
-                print(self.expiration_dates_list)
+                self.show_expiration_and_option_type_selection(dynamic_widgets_frame, ticker)
             else:
                 messagebox.showerror("Validation Failed", f"Invalid ticker symbol: {ticker}. Please check and try again.")
         except Exception as e:
             messagebox.showerror("Validation Failed", f"An error occurred: {str(e)}")
+
+    def show_expiration_and_option_type_selection(self, frame, ticker):
+        """
+        Display the expiration date and option type selection below the ticker entry.
+        """
+        for widget in frame.winfo_children():
+            widget.destroy()
+        
+        tk.Label(frame, text="Select Expiration Date:").pack(pady=5)
+        expiration_var = tk.StringVar(value=self.expiration_dates_list[0])
+        expiration_menu = tk.OptionMenu(frame, expiration_var, *self.expiration_dates_list)
+        expiration_menu.pack(pady=5)
+
+        tk.Label(frame, text="Select Option Type:").pack(pady=5)
+        option_type_var = tk.StringVar(value="calls")
+        option_type_menu = tk.OptionMenu(frame, option_type_var, "calls", "puts")
+        option_type_menu.pack(pady=5)
+
+
 
 
 
