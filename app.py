@@ -4,6 +4,11 @@ from tastytrade import Session
 from tastytrade.utils import TastytradeError
 from tastytrade.instruments import NestedOptionChain
 from fredapi import Fred
+from schwab.auth import easy_client
+import nest_asyncio
+nest_asyncio.apply()
+
+import asyncio
 from credential_manager import load_cached_credentials, save_cached_credentials
 from plot_manager_tasty import open_plot_manager_tasty
 
@@ -46,7 +51,14 @@ def show_initial_window():
             risk_free_rate = sofr_data.iloc[-1]
 
             if fred_remember_var.get():
-                save_cached_credentials(config.get('TASTYTRADE_USERNAME'), config.get('TASTYTRADE_PASSWORD'), fred_api_key)
+                save_cached_credentials(
+                    config.get('TASTYTRADE_USERNAME'), 
+                    config.get('TASTYTRADE_PASSWORD'), 
+                    fred_api_key, 
+                    config.get('SCHWAB_API_KEY'), 
+                    config.get('SCHWAB_SECRET'), 
+                    config.get('SCHWAB_CALLBACK_URL')
+                )
 
             if selected_platform == "TastyTrade":
                 tastytrade_instance = Tastytrade(window=initial_window, risk_free_rate=risk_free_rate)
@@ -64,6 +76,20 @@ def show_initial_window():
 
     initial_window.mainloop()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class Tastytrade:
     def __init__(self, window, risk_free_rate):
         self.window = window
@@ -76,11 +102,7 @@ class Tastytrade:
 
     def show_login(self):
         """
-        Display the login elements on the given window for the user to enter their credentials.
-
-        This function adds widgets to the provided window where the user can input their Tastytrade username and password.
-        It handles login validation and manages the caching of credentials.
-        Upon successful login, it proceeds to validate the ticker and then shows options for expiration dates and option types.
+        Display the login elements for Tastytrade on the given window for the user to enter their credentials.
         """
         for widget in self.window.winfo_children():
             widget.destroy()
@@ -112,10 +134,6 @@ class Tastytrade:
     def check_credentials(self, username_entry, password_entry, remember_var):
         """
         Validate the user's credentials and initiate a session with Tastytrade.
-
-        This function checks the user's inputted username and password by attempting to create a session
-        with Tastytrade. If successful, it will cache the credentials if the 'Remember Me' checkbox is selected.
-        Upon successful login, it proceeds to the next step.
         """
         username = username_entry.get()
         password = password_entry.get()
@@ -125,7 +143,14 @@ class Tastytrade:
             messagebox.showinfo("Login Success", "Login successful!")
 
             if remember_var.get():
-                save_cached_credentials(username, password, config.get('FRED_API_KEY'))
+                save_cached_credentials(
+                    username=username,
+                    password=password,
+                    fred_api_key=config.get('FRED_API_KEY'),
+                    schwab_api_key=config.get('SCHWAB_API_KEY'),
+                    schwab_secret=config.get('SCHWAB_SECRET'),
+                    schwab_callback_url=config.get('SCHWAB_CALLBACK_URL')
+                )
 
             self.show_ticker_entry()
         except TastytradeError as e:
@@ -242,18 +267,30 @@ class Tastytrade:
             self.risk_free_rate
         )
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class Schwab:
     def __init__(self, window, risk_free_rate):
         self.window = window
         self.risk_free_rate = risk_free_rate
-        # No definitions for now
+        self.session = None
 
     def show_login(self):
         """
         Display the login elements for Schwab on the given window for the user to enter their credentials.
-
-        This function adds widgets to the provided window where the user can input their Schwab API Key,
-        Secret, and Callback URL. It handles credential caching if 'Remember Me' is checked.
         """
         for widget in self.window.winfo_children():
             widget.destroy()
@@ -285,5 +322,41 @@ class Schwab:
         remember_checkbox = tk.Checkbutton(self.window, text="Remember Me", variable=remember_var)
         remember_checkbox.pack(pady=5)
 
+        tk.Button(
+            self.window,
+            text="Login",
+            command=lambda: self.check_credentials(api_key_entry, secret_entry, callback_url_entry, remember_var)
+        ).pack(pady=20)
+
+    def check_credentials(self, api_key_entry, secret_entry, callback_url_entry, remember_var):
+        """
+        Validate the user's credentials and initiate a session with Schwab.
+        """
+        api_key = api_key_entry.get()
+        secret = secret_entry.get()
+        callback_url = callback_url_entry.get()
+
+        try:
+            self.session = easy_client(
+                token_path='token.json',
+                api_key=api_key,
+                app_secret=secret,
+                callback_url=callback_url,
+                asyncio=True)
+            messagebox.showinfo("Login Success", "Login successful!")
+
+            if remember_var.get():
+                save_cached_credentials(
+                    username=config.get('TASTYTRADE_USERNAME'),
+                    password=config.get('TASTYTRADE_PASSWORD'),
+                    fred_api_key=config.get('FRED_API_KEY'),
+                    schwab_api_key=api_key,
+                    schwab_secret=secret,
+                    schwab_callback_url=callback_url
+                )
+
+        except Exception  as e:
+            messagebox.showerror("Login Failed", f"An error occurred: {str(e)}")
+
 if __name__ == "__main__":
-    show_initial_window()
+    asyncio.run(show_initial_window())
