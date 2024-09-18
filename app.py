@@ -19,6 +19,13 @@ from plot_manager_tasty import open_plot_manager_tasty
 config = load_cached_credentials()
 risk_free_rate = 0.0
 
+def start_event_loop(loop):
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+loop = asyncio.new_event_loop()
+threading.Thread(target=start_event_loop, args=(loop,), daemon=True).start()
+
 def show_initial_window():
     """
     Display the initial window with a select menu, FRED API key entry, and an Enter button.
@@ -283,12 +290,12 @@ class Tastytrade:
 
 
 
-
 class Schwab:
     def __init__(self, window, risk_free_rate):
         self.window = window
         self.risk_free_rate = risk_free_rate
         self.session = None
+        self.expiration_dates_list = []
 
     def show_login(self):
         """
@@ -320,28 +327,19 @@ class Schwab:
         if config.get('SCHWAB_CALLBACK_URL'):
             callback_url_entry.insert(0, config['SCHWAB_CALLBACK_URL'])
 
-        remember_var = tk.BooleanVar(value=False)
-        remember_checkbox = tk.Checkbutton(self.window, text="Remember Me", variable=remember_var)
-        remember_checkbox.pack(pady=5)
-
         tk.Button(
             self.window,
             text="Login",
-            command=lambda: self.check_credentials(api_key_entry, secret_entry, callback_url_entry, remember_var)
+            command=lambda: self.check_credentials(api_key_entry, secret_entry, callback_url_entry)
         ).pack(pady=20)
 
-    def check_credentials(self, api_key_entry, secret_entry, callback_url_entry, remember_var):
+    def check_credentials(self, api_key_entry, secret_entry, callback_url_entry):
         """
         Validate the user's credentials and initiate a session with Schwab.
         """
         api_key = api_key_entry.get()
         secret = secret_entry.get()
         callback_url = callback_url_entry.get()
-
-        def run_async_in_thread(async_func, *args):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(async_func(*args))
 
         try:
             self.session = easy_client(
@@ -352,26 +350,13 @@ class Schwab:
                 asyncio=True)
             messagebox.showinfo("Login Success", "Login successful!")
 
-            if remember_var.get():
-                save_cached_credentials(
-                    username=config.get('TASTYTRADE_USERNAME'),
-                    password=config.get('TASTYTRADE_PASSWORD'),
-                    fred_api_key=config.get('FRED_API_KEY'),
-                    schwab_api_key=api_key,
-                    schwab_secret=secret,
-                    schwab_callback_url=callback_url
-                )
-
-            # Run the async method in a separate thread
-            threading.Thread(target=run_async_in_thread, args=(self.show_ticker_entry,)).start()
-
-        except TastytradeError as e:
+            self.show_ticker_entry()
+        except Exception as e:
             messagebox.showerror("Login Failed", f"An error occurred: {str(e)}")
 
-    async def show_ticker_entry(self):
+    def show_ticker_entry(self):
         """
         Display the ticker entry field and the 'Search' button.
-        After successful validation, display expiration date and option type selection below.
         """
         for widget in self.window.winfo_children():
             widget.destroy()
@@ -384,20 +369,45 @@ class Schwab:
 
         dynamic_widgets_frame = tk.Frame(self.window)
 
-        # Fetch option expiration chain
-        resp = await self.session.get_option_expiration_chain('AAPL')
-        assert resp.status_code == httpx.codes.OK
-        expirations = resp.json()
-
-        expiration_dates_list = []
-
-        if expirations is not None:
-            for expiration in expirations["expirationList"]:
-                expiration_dates_list.append(expiration["expirationDate"])
-
-        print(expiration_dates_list)
+        tk.Button(
+            self.window,
+            text="Search",
+            command=lambda: self.run_async_validation(ticker_entry.get(), dynamic_widgets_frame)
+        ).pack(pady=20)
 
         dynamic_widgets_frame.pack(pady=(40, 0))
+
+    def run_async_validation(self, ticker, dynamic_widgets_frame):
+        """
+        Run the asynchronous ticker validation using `asyncio.run_coroutine_threadsafe`.
+        """
+        future = asyncio.run_coroutine_threadsafe(self.validate_ticker(ticker, dynamic_widgets_frame), loop)
+        future.add_done_callback(lambda f: print(f.result()) if f.exception() is None else print(f.exception()))
+
+    async def validate_ticker(self, ticker, dynamic_widgets_frame):
+        """
+        Validate the ticker symbol and retrieve option chains.
+        """
+        for widget in dynamic_widgets_frame.winfo_children():
+            widget.destroy()
+
+        try:
+            resp = await self.session.get_option_expiration_chain(ticker)
+            assert resp.status_code == httpx.codes.OK
+            expirations = resp.json()
+
+            if expirations is not None:
+                self.expiration_dates_list = []
+
+                for expiration in expirations["expirationList"]:
+                    self.expiration_dates_list.append(expiration["expirationDate"])
+
+                print(self.expiration_dates_list)
+            else:
+                messagebox.showerror("Validation Failed", f"Invalid ticker symbol: {ticker}. Please check and try again.")
+        except Exception as e:
+            messagebox.showerror("Validation Failed", f"An error occurred: {str(e)}")
+
 
 
 if __name__ == "__main__":
