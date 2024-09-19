@@ -36,8 +36,8 @@ def show_initial_window():
     initial_window.geometry("300x250")
 
     tk.Label(initial_window, text="Select Platform:").pack(pady=5)
-    platform_var = tk.StringVar(value="TastyTrade")
-    platform_menu = tk.OptionMenu(initial_window, platform_var, "TastyTrade", "Schwab")
+    platform_var = tk.StringVar(value="Schwab")
+    platform_menu = tk.OptionMenu(initial_window, platform_var, "Schwab", "TastyTrade")
     platform_menu.pack(pady=5)
 
     tk.Label(initial_window, text="FRED API Key:").pack(pady=5)
@@ -272,6 +272,9 @@ class Schwab:
         self.window = window
         self.risk_free_rate = risk_free_rate
         self.session = None
+        self.api_key = None
+        self.secret = None
+        self.callback_url = None
         self.expiration_dates_list = []
 
     def show_login(self):
@@ -314,16 +317,16 @@ class Schwab:
         """
         Validate the user's credentials and initiate a session with Schwab.
         """
-        api_key = api_key_entry.get()
-        secret = secret_entry.get()
-        callback_url = callback_url_entry.get()
+        self.api_key = api_key_entry.get()
+        self.secret = secret_entry.get()
+        self.callback_url = callback_url_entry.get()
 
         try:
             self.session = easy_client(
                 token_path='token.json',
-                api_key=api_key,
-                app_secret=secret,
-                callback_url=callback_url,
+                api_key=self.api_key,
+                app_secret=self.secret,
+                callback_url=self.callback_url,
                 asyncio=True)
             messagebox.showinfo("Login Success", "Login successful!")
 
@@ -424,7 +427,9 @@ class Schwab:
         """
         open_plot_manager_schwab(
             ticker,
-            self.session,
+            self.api_key,
+            self.secret,
+            self.callback_url,
             selected_date,
             option_type,
             self.risk_free_rate
