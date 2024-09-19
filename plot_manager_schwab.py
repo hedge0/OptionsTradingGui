@@ -374,52 +374,72 @@ class PlotManagerSchwab:
 
         self.canvas.draw()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     async def start_streamers(self):
         """
         Start the streaming tasks for options prices and underlying asset quotes.
+        This method creates two asyncio tasks: one for streaming options prices
+        and another for streaming raw quotes of the underlying asset.
         """
         session = easy_client(
             token_path='token.json',
             api_key=self.api_key,
             app_secret=self.secret,
             callback_url=self.callback_url,
-            asyncio=True)
-        
+            asyncio=True
+        )
+
         option_date = datetime.strptime(self.selected_date, "%Y-%m-%d").date()
         contract_type = session.Options.ContractType.CALL if self.option_type == "calls" else session.Options.ContractType.PUT
         chain_primary_key = "callExpDateMap" if self.option_type == "calls" else "putExpDateMap"
 
-        await asyncio.sleep(3)
+        async def stream_options():
+            while True:
+                try:
+                    respChain = await session.get_option_chain(self.ticker, from_date=option_date, to_date=option_date, contract_type=contract_type)
+                    assert respChain.status_code == httpx.codes.OK
+                    chain = respChain.json()
 
-        while True:
-            try:
-                resp = await session.get_option_chain(self.ticker, from_date=option_date, to_date=option_date, contract_type=contract_type)
-                assert resp.status_code == httpx.codes.OK
-                chain = resp.json()
+                    if chain["underlyingPrice"] is not None:
+                        self.underlying_price = float(chain["underlyingPrice"])
 
-                chain_secondary_key = next(iter(chain[chain_primary_key].keys()))
+                    chain_secondary_key = next(iter(chain[chain_primary_key].keys()))
+                    for strike_price in chain[chain_primary_key][chain_secondary_key]:
+                        option_json = chain[chain_primary_key][chain_secondary_key][strike_price][0]
+                        bid_price = option_json["bid"]
+                        ask_price = option_json["ask"]
 
-                for option in chain[chain_primary_key][chain_secondary_key]:
-                    print(chain[chain_primary_key][chain_secondary_key][option])
-                    break
-            except Exception as e:
-                print(f"An unexpected error occurred: {e}")
+                        if strike_price is not None and bid_price is not None and ask_price is not None:
+                            mid_price = float((bid_price + ask_price) / 2)
+                            self.quote_data[float(strike_price)] = {
+                                "bid": float(bid_price),
+                                "ask": float(ask_price),
+                                "mid": float(mid_price)
+                            }
 
-            await asyncio.sleep(5)
+                    self.update_plot()
+                except Exception as e:
+                    print(f"An unexpected error occurred in options stream: {e}")
+
+                await asyncio.sleep(2.5)
+
+        self.tasks = [
+            asyncio.create_task(stream_options())
+        ]
+
+        try:
+            await asyncio.gather(*self.tasks)
+        except asyncio.CancelledError:
+            pass
+
+    def stop(self):
+        """
+        Stop the streaming tasks and close the streamers.
+
+        This method cancels the asyncio tasks, and ensures
+        that all streamers are properly closed.
+        """
+        for task in self.tasks:
+            task.cancel()
 
 def open_plot_manager_schwab(ticker, api_key, secret, callback_url, selected_date, option_type, risk_free_rate):
     """
@@ -447,6 +467,7 @@ def open_plot_manager_schwab(ticker, api_key, secret, callback_url, selected_dat
     stream_thread.start()
 
     def on_closing():
+        plot_manager.stop()
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_closing)
