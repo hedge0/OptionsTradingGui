@@ -14,7 +14,7 @@ from models import filter_strikes, slv_model, rfv_model, sabr_model, rbf_model, 
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
 class PlotManagerSchwab:
-    def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
+    def __init__(self, root, ticker, session, selected_date, option_type, risk_free_rate):
         """
         Initialize the PlotManager class.
 
@@ -30,8 +30,6 @@ class PlotManagerSchwab:
         """
         self.root = root
         self.session = session
-        self.expiration_to_strikes_map = expiration_to_strikes_map
-        self.streamer_to_strike_map = streamer_to_strike_map
         self.selected_date = selected_date
         self.option_type = option_type
         self.risk_free_rate = risk_free_rate / 100
@@ -70,9 +68,6 @@ class PlotManagerSchwab:
         self.canvas.mpl_connect('button_release_event', lambda event: on_release(event, self))
 
         self.precompile_numba_functions()
-
-        # Add stop_event for graceful shutdown
-        self.stop_event = asyncio.Event()
 
     def precompile_numba_functions(self):
         """
@@ -409,50 +404,6 @@ class PlotManagerSchwab:
                 "mid": float(mid_price)
             }
 
-    async def stream_live_prices(self, session, subs_list):
-        """
-        Stream live option prices and update the plot in real time.
-
-        Args:
-            session (Session): The Schwab session object.
-            subs_list (list): A list of symbols to subscribe to for streaming quotes.
-
-        This method continuously receives live quotes from the DXLinkStreamer, updates the
-        internal quote dictionary, and refreshes the plot at regular intervals.
-        """
-        async with DXLinkStreamer(session) as streamer:
-            await streamer.subscribe(EventType.QUOTE, subs_list)
-            start_time = time.time()
-            try:
-                while not self.stop_event.is_set():
-                    quote = await streamer.get_event(EventType.QUOTE)
-                    self.process_quote(quote)
-
-                    if time.time() - start_time >= 1:
-                        self.update_plot()
-                        start_time = time.time()
-            except asyncio.CancelledError:
-                pass
-
-    async def stream_raw_quotes(self, session, ticker_list):
-        """
-        Stream live quotes for the underlying asset and update the mid price.
-
-        Args:
-            session (Session): The Schwab session object.
-            ticker_list (list): A list of ticker symbols to subscribe to for streaming quotes.
-
-        This method continuously receives live quotes for the underlying asset from the DXLinkStreamer,
-        updating the mid price in real time.
-        """
-        async with DXLinkStreamer(session) as streamer:
-            await streamer.subscribe(EventType.QUOTE, ticker_list)
-            try:
-                while not self.stop_event.is_set():
-                    quote = await streamer.get_event(EventType.QUOTE)
-                    self.update_mid_price(quote)
-            except asyncio.CancelledError:
-                pass
 
     async def start_streamers(self):
         """
@@ -470,26 +421,13 @@ class PlotManagerSchwab:
         except asyncio.CancelledError:
             pass
 
-    def stop(self):
-        """
-        Stop the streaming tasks and close the streamers.
-
-        This method sets the stop event, cancels the asyncio tasks, and ensures
-        that all streamers are properly closed.
-        """
-        self.stop_event.set()
-        for task in self.tasks:
-            task.cancel()
-
-def open_plot_manager_schwab(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
+def open_plot_manager_schwab(ticker, session, selected_date, option_type, risk_free_rate):
     """
     Open the plot manager to visualize the implied volatility smile.
 
     Args:
         ticker (str): The ticker symbol of the underlying asset.
-        session (Session): The Tastytrade session object.
-        expiration_to_strikes_map (dict): Mapping of expiration dates to their corresponding strikes.
-        streamer_to_strike_map (dict): Mapping of streamer symbols to their strike prices.
+        session (Session): The Schwab session object.
         selected_date (str): The selected expiration date.
         option_type (str): The type of option ('calls' or 'puts').
         risk_free_rate (float): The risk-free rate used for calculations.
@@ -498,8 +436,8 @@ def open_plot_manager_schwab(ticker, session, expiration_to_strikes_map, streame
     to start streaming data and updating the plot in real time.
     """
     root = tk.Toplevel()
-    plot_manager = PlotManagerSchwab(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate)
-    
+    plot_manager = PlotManagerSchwab(root, ticker, session, selected_date, option_type, risk_free_rate)
+
     def run_asyncio_tasks():
         asyncio.run(plot_manager.start_streamers())
 
