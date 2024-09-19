@@ -6,15 +6,15 @@ from tastytrade.utils import TastytradeError
 from tastytrade.instruments import NestedOptionChain
 from fredapi import Fred
 from schwab.auth import easy_client
-
-import nest_asyncio
 import threading
 import asyncio
+import nest_asyncio
 
 nest_asyncio.apply()
 
 from credential_manager import load_cached_credentials, save_cached_credentials
 from plot_manager_tasty import open_plot_manager_tasty
+from plot_manager_schwab import open_plot_manager_schwab
 
 config = load_cached_credentials()
 risk_free_rate = 0.0
@@ -86,18 +86,6 @@ def show_initial_window():
     tk.Button(initial_window, text="Enter", command=proceed_to_login).pack(pady=20)
 
     initial_window.mainloop()
-
-
-
-
-
-
-
-
-
-
-
-
 
 class Tastytrade:
     def __init__(self, window, risk_free_rate):
@@ -279,20 +267,6 @@ class Tastytrade:
             self.risk_free_rate
         )
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class Schwab:
     def __init__(self, window, risk_free_rate):
         self.window = window
@@ -432,9 +406,29 @@ class Schwab:
         option_type_menu = tk.OptionMenu(frame, option_type_var, "calls", "puts")
         option_type_menu.pack(pady=5)
 
+        tk.Button(
+            frame,
+            text="Enter",
+            command=lambda: self.proceed_to_plot(
+                ticker, expiration_var.get(), option_type_var.get()
+            )
+        ).pack(pady=20)
 
+    def proceed_to_plot(self, ticker, selected_date, option_type):
+        """
+        Proceed to plot the selected options data.
 
-
+        This function is called when the user selects an expiration date and option type,
+        and clicks 'Enter'. It destroys the window and opens the plot manager with the
+        selected data.
+        """
+        open_plot_manager_schwab(
+            ticker,
+            self.session,
+            selected_date,
+            option_type,
+            self.risk_free_rate
+        )
 
 if __name__ == "__main__":
     show_initial_window()
