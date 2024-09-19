@@ -18,22 +18,24 @@ from models import filter_strikes, slv_model, rfv_model, sabr_model, rbf_model, 
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
 class PlotManagerSchwab:
-    def __init__(self, root, ticker, session, selected_date, option_type, risk_free_rate):
+    def __init__(self, root, ticker, api_key, secret, callback_url, selected_date, option_type, risk_free_rate):
         """
-        Initialize the PlotManager class.
+        Initialize the PlotManagerSchwab class.
 
         Args:
             root (tk.Tk): The root window for the Tkinter GUI.
             ticker (str): The ticker symbol of the underlying asset.
-            session (Session): The Schwab session object.
-            expiration_to_strikes_map (dict): Mapping of expiration dates to their corresponding strikes.
-            streamer_to_strike_map (dict): Mapping of streamer symbols to their strike prices.
+            api_key (str): The API key for authentication with Schwab.
+            secret (str): The API secret for authentication with Schwab.
+            callback_url (str): The callback URL for Schwab's authentication process.
             selected_date (str): The selected expiration date.
             option_type (str): The type of option ('calls' or 'puts').
-            risk_free_rate (float): The risk-free rate used for calculations.
+            risk_free_rate (float): The risk-free rate (in percentage) used for calculations.
         """
         self.root = root
-        self.session = session
+        self.api_key = api_key
+        self.secret = secret
+        self.callback_url = callback_url
         self.selected_date = selected_date
         self.option_type = option_type
         self.risk_free_rate = risk_free_rate / 100
@@ -379,20 +381,29 @@ class PlotManagerSchwab:
 
 
 
+
+
+
+
+
+
+
     async def start_streamers(self):
         """
         Start the streaming tasks for options prices and underlying asset quotes.
         """
         session = easy_client(
             token_path='token.json',
-            api_key='uDfstiGv6PHJt73VbsGwcuDaWE7n7m5K',
-            app_secret='96D7RcZeT8HIdwxD',
-            callback_url='https://127.0.0.1:8182',
+            api_key=self.api_key,
+            app_secret=self.secret,
+            callback_url=self.callback_url,
             asyncio=True)
         
         option_date = datetime.strptime(self.selected_date, "%Y-%m-%d").date()
         contract_type = session.Options.ContractType.CALL if self.option_type == "calls" else session.Options.ContractType.PUT
-        map_exp_date_key = "callExpDateMap" if self.option_type == "calls" else "putExpDateMap"
+        chain_primary_key = "callExpDateMap" if self.option_type == "calls" else "putExpDateMap"
+
+        await asyncio.sleep(3)
 
         while True:
             try:
@@ -400,31 +411,34 @@ class PlotManagerSchwab:
                 assert resp.status_code == httpx.codes.OK
                 chain = resp.json()
 
-                for item in chain[map_exp_date_key]['2024-09-27:9']:
-                    print(chain[map_exp_date_key]['2024-09-27:9'][item])
+                chain_secondary_key = next(iter(chain[chain_primary_key].keys()))
+
+                for option in chain[chain_primary_key][chain_secondary_key]:
+                    print(chain[chain_primary_key][chain_secondary_key][option])
                     break
             except Exception as e:
                 print(f"An unexpected error occurred: {e}")
 
             await asyncio.sleep(5)
 
-
-def open_plot_manager_schwab(ticker, session, selected_date, option_type, risk_free_rate):
+def open_plot_manager_schwab(ticker, api_key, secret, callback_url, selected_date, option_type, risk_free_rate):
     """
     Open the plot manager to visualize the implied volatility smile.
 
     Args:
         ticker (str): The ticker symbol of the underlying asset.
-        session (Session): The Schwab session object.
+        api_key (str): The API key for authentication with Schwab.
+        secret (str): The API secret for authentication with Schwab.
+        callback_url (str): The callback URL for Schwab's authentication process.
         selected_date (str): The selected expiration date.
         option_type (str): The type of option ('calls' or 'puts').
         risk_free_rate (float): The risk-free rate used for calculations.
 
-    This function creates a Tkinter root window and initializes the PlotManager
+    This function creates a Tkinter root window and initializes the PlotManagerSchwab
     to start streaming data and updating the plot in real time.
     """
     root = tk.Toplevel()
-    plot_manager = PlotManagerSchwab(root, ticker, session, selected_date, option_type, risk_free_rate)
+    plot_manager = PlotManagerSchwab(root, ticker, api_key, secret, callback_url, selected_date, option_type, risk_free_rate)
 
     def run_asyncio_tasks():
         asyncio.run(plot_manager.start_streamers())
