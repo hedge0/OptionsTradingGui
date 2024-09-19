@@ -377,8 +377,6 @@ class PlotManagerSchwab:
     async def start_streamers(self):
         """
         Start the streaming tasks for options prices and underlying asset quotes.
-        This method creates two asyncio tasks: one for streaming options prices
-        and another for streaming raw quotes of the underlying asset.
         """
         session = easy_client(
             token_path='token.json',
