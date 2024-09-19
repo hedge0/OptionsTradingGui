@@ -185,7 +185,7 @@ class Tastytrade:
         Validate the ticker symbol and retrieve option chains.
         If successful, display expiration date and option type selection below.
         """
-        ticker = ticker_entry.get()
+        ticker = ticker_entry.get().upper()
 
         try:
             self.chain = NestedOptionChain.get_chain(self.session, ticker)
@@ -364,7 +364,7 @@ class Schwab:
         """
         Validate the ticker symbol and retrieve option chains.
         """
-        ticker = ticker_entry.get()
+        ticker = ticker_entry.get().upper()
 
         try:
             resp = await self.session.get_option_expiration_chain(ticker)

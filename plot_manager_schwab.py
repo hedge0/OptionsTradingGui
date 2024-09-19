@@ -1,8 +1,12 @@
 import asyncio
+import httpx
+import nest_asyncio
+
+nest_asyncio.apply()
+
 from datetime import datetime, timedelta
-import math
+from schwab.auth import easy_client
 import threading
-import time
 import numpy as np
 from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler
@@ -39,6 +43,7 @@ class PlotManagerSchwab:
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
         self.selected_method = tk.StringVar(value="Hybrid")
         self.selected_objective = tk.StringVar(value="WLS")
         self.press_event = None
@@ -367,59 +372,41 @@ class PlotManagerSchwab:
 
         self.canvas.draw()
 
-    def update_mid_price(self, quote):
-        """
-        Update the mid price of the underlying asset based on live quotes.
 
-        Args:
-            quote (Quote): The latest quote object containing bid and ask prices.
 
-        This method calculates the mid price from the bid and ask prices and updates
-        the underlying asset price accordingly.
-        """
-        bid_price = quote.bidPrice
-        ask_price = quote.askPrice
-        if bid_price is not None and ask_price is not None:
-            self.underlying_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
 
-    def process_quote(self, quote):
-        """
-        Process incoming quote data and update the internal quote dictionary.
 
-        Args:
-            quote (Quote): The latest quote object containing bid and ask prices.
 
-        This method updates the quote data dictionary with the latest bid, ask, and mid prices
-        for each strike price based on the event symbol.
-        """
-        event_symbol = quote.eventSymbol
-        bid_price = quote.bidPrice
-        ask_price = quote.askPrice
-        strike_price = self.streamer_to_strike_map.get(event_symbol)
-        if strike_price is not None and bid_price is not None and ask_price is not None:
-            mid_price = float((bid_price + ask_price) / 2)
-            self.quote_data[float(strike_price)] = {
-                "bid": float(bid_price),
-                "ask": float(ask_price),
-                "mid": float(mid_price)
-            }
 
 
     async def start_streamers(self):
         """
         Start the streaming tasks for options prices and underlying asset quotes.
-
-        This method creates and runs two asyncio tasks: one for streaming options prices
-        and another for streaming raw quotes of the underlying asset.
         """
-        self.tasks = [
-            asyncio.create_task(self.stream_live_prices(self.session, self.expiration_to_strikes_map[datetime.strptime(self.selected_date, '%Y-%m-%d').date()][self.option_type])),
-            asyncio.create_task(self.stream_raw_quotes(self.session, [self.ticker]))
-        ]
-        try:
-            await asyncio.gather(*self.tasks)
-        except asyncio.CancelledError:
-            pass
+        session = easy_client(
+            token_path='token.json',
+            api_key='uDfstiGv6PHJt73VbsGwcuDaWE7n7m5K',
+            app_secret='96D7RcZeT8HIdwxD',
+            callback_url='https://127.0.0.1:8182',
+            asyncio=True)
+        
+        option_date = datetime.strptime(self.selected_date, "%Y-%m-%d").date()
+        contract_type = session.Options.ContractType.CALL if self.option_type == "calls" else session.Options.ContractType.PUT
+
+        while True:
+            try:
+                resp = await session.get_option_chain(self.ticker, from_date=option_date, to_date=option_date, contract_type=contract_type)
+                assert resp.status_code == httpx.codes.OK
+                chain = resp.json()
+
+                for item in chain["callExpDateMap"]['2024-09-27:9']:
+                    print(chain["callExpDateMap"]['2024-09-27:9'][item])
+                    break
+            except Exception as e:
+                print(f"An unexpected error occurred: {e}")
+
+            await asyncio.sleep(5)
+
 
 def open_plot_manager_schwab(ticker, session, selected_date, option_type, risk_free_rate):
     """
@@ -445,7 +432,6 @@ def open_plot_manager_schwab(ticker, session, selected_date, option_type, risk_f
     stream_thread.start()
 
     def on_closing():
-        plot_manager.stop()
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_closing)
