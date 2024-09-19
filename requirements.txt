@@ -1,7 +1,9 @@
 matplotlib
 tk
-tastytrade
 scipy
 fredapi
 numba
 sklearn
+httpx
+schwab-py
+tastytrade
