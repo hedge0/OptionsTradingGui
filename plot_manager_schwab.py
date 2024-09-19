@@ -392,6 +392,7 @@ class PlotManagerSchwab:
         
         option_date = datetime.strptime(self.selected_date, "%Y-%m-%d").date()
         contract_type = session.Options.ContractType.CALL if self.option_type == "calls" else session.Options.ContractType.PUT
+        map_exp_date_key = "callExpDateMap" if self.option_type == "calls" else "putExpDateMap"
 
         while True:
             try:
@@ -399,8 +400,8 @@ class PlotManagerSchwab:
                 assert resp.status_code == httpx.codes.OK
                 chain = resp.json()
 
-                for item in chain["callExpDateMap"]['2024-09-27:9']:
-                    print(chain["callExpDateMap"]['2024-09-27:9'][item])
+                for item in chain[map_exp_date_key]['2024-09-27:9']:
+                    print(chain[map_exp_date_key]['2024-09-27:9'][item])
                     break
             except Exception as e:
                 print(f"An unexpected error occurred: {e}")
