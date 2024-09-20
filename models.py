@@ -144,53 +144,6 @@ def filter_strikes(x, S, num_stdev=1.25, two_sigma_move=False):
 
     return x[(x >= lower_bound) & (x <= upper_bound)]
 
-def calculate_iv_quantlib(option_price, S, K, r, T, q, option_type='calls', upper_bound=10.0):
-    """
-    Calculate the implied volatility using the Barone-Adesi Whaley model with dividends.
-
-    Args:
-        option_price (float): Observed option price (mid-price).
-        S (float): Current stock price.
-        K (float): Strike price of the option.
-        r (float): Risk-free interest rate.
-        T (float): Time to expiration in years.
-        q (float, optional): Continuous dividend yield. Defaults to 0.0.
-        option_type (str, optional): Type of option ('calls' or 'puts'). Defaults to 'calls'.
-        upper_bound (float, optional): Upper bound for volatility search range. Defaults to 10.0.
-
-    Returns:
-        float: The implied volatility.
-    """
-    spot_price = ql.SimpleQuote(S)
-    strike_price = K
-    risk_free_rate = ql.SimpleQuote(r)
-    dividend_yield = ql.SimpleQuote(q)
-    volatility = ql.SimpleQuote(0.2)
-
-    expiration_date = ql.Date().todaysDate() + int(T * 365)
-    payoff = ql.PlainVanillaPayoff(ql.Option.Call if option_type == 'calls' else ql.Option.Put, strike_price)
-    exercise = ql.AmericanExercise(ql.Date().todaysDate(), expiration_date)
-
-    process = ql.BlackScholesMertonProcess(
-        ql.QuoteHandle(spot_price),
-        ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), ql.QuoteHandle(dividend_yield), ql.Actual365Fixed())),
-        ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), ql.QuoteHandle(risk_free_rate), ql.Actual365Fixed())),
-        ql.BlackVolTermStructureHandle(ql.BlackConstantVol(0, ql.NullCalendar(), ql.QuoteHandle(volatility), ql.Actual365Fixed()))
-    )
-
-    option = ql.VanillaOption(payoff, exercise)
-    option.setPricingEngine(ql.BaroneAdesiWhaleyApproximationEngine(process))
-
-    try:
-        iv = option.impliedVolatility(option_price, process, 1e-8, 100, 0.2, upper_bound)
-    except RuntimeError as e:
-        if 'root not bracketed' in str(e):
-            return calculate_iv_quantlib(option_price, S, K, r, T, q, option_type, upper_bound * 10)
-        else:
-            raise e
-
-    return iv
-
 def calculate_option_price_quantlib(S, K, r, T, q, sigma, option_type='calls', american=False):
     """
     Calculate the option price using QuantLib.
@@ -237,3 +190,54 @@ def calculate_option_price_quantlib(S, K, r, T, q, sigma, option_type='calls', a
         option.setPricingEngine(ql.AnalyticEuropeanEngine(process))
 
     return option.NPV()
+
+def calculate_iv_quantlib(option_price, S, K, r, T, q, option_type='calls', upper_bound=10.0, retries=0, max_retries=5):
+    """
+    Calculate the implied volatility using the Barone-Adesi Whaley model with dividends.
+    Args:
+        option_price (float): Observed option price (mid-price).
+        S (float): Current stock price.
+        K (float): Strike price of the option.
+        r (float): Risk-free interest rate.
+        T (float): Time to expiration in years.
+        q (float, optional): Continuous dividend yield. Defaults to 0.0.
+        option_type (str, optional): Type of option ('calls' or 'puts'). Defaults to 'calls'.
+        upper_bound (float, optional): Upper bound for volatility search range. Defaults to 1.0.
+        retries (int, optional): Number of retries attempted. Defaults to 0.
+        max_retries (int, optional): Maximum number of retries allowed. Defaults to 5.
+
+    Returns:
+        float: The implied volatility.
+    """
+    spot_price = ql.SimpleQuote(S)
+    strike_price = K
+    risk_free_rate = ql.SimpleQuote(r)
+    dividend_yield = ql.SimpleQuote(q)
+    volatility = ql.SimpleQuote(0.2)
+
+    expiration_date = ql.Date().todaysDate() + int(T * 365)
+    payoff = ql.PlainVanillaPayoff(ql.Option.Call if option_type == 'calls' else ql.Option.Put, strike_price)
+    exercise = ql.AmericanExercise(ql.Date().todaysDate(), expiration_date)
+
+    process = ql.BlackScholesMertonProcess(
+        ql.QuoteHandle(spot_price),
+        ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), ql.QuoteHandle(dividend_yield), ql.Actual365Fixed())),
+        ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), ql.QuoteHandle(risk_free_rate), ql.Actual365Fixed())),
+        ql.BlackVolTermStructureHandle(ql.BlackConstantVol(0, ql.NullCalendar(), ql.QuoteHandle(volatility), ql.Actual365Fixed()))
+    )
+
+    option = ql.VanillaOption(payoff, exercise)
+    option.setPricingEngine(ql.BaroneAdesiWhaleyApproximationEngine(process))
+
+    try:
+        iv = option.impliedVolatility(option_price, process, 1e-8, 100, 0.2, upper_bound)
+        return iv
+    except RuntimeError as e:
+        if 'root not bracketed' in str(e):
+            # Incrementally increase the upper bound and retry, but cap the retries to avoid infinite recursion.
+            if retries < max_retries:
+                return calculate_iv_quantlib(option_price, S, K, r, T, q, option_type, upper_bound * 2, retries + 1, max_retries)
+            else:
+                raise RuntimeError(f"Max retries reached: Implied volatility could not be found after {max_retries} attempts.")
+        else:
+            raise e
