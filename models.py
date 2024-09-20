@@ -191,7 +191,7 @@ def calculate_option_price_quantlib(S, K, r, T, q, sigma, option_type='calls', a
 
     return option.NPV()
 
-def calculate_iv_quantlib(option_price, S, K, r, T, q, option_type='calls', upper_bound=10.0, retries=0, max_retries=5):
+def calculate_iv_quantlib(option_price, S, K, r, T, q, option_type='calls', upper_bound=10.0, retries=0, max_retries=1):
     """
     Calculate the implied volatility using the Barone-Adesi Whaley model with dividends.
     Args:
@@ -238,6 +238,6 @@ def calculate_iv_quantlib(option_price, S, K, r, T, q, option_type='calls', uppe
             if retries < max_retries:
                 return calculate_iv_quantlib(option_price, S, K, r, T, q, option_type, upper_bound * 2, retries + 1, max_retries)
             else:
-                raise RuntimeError(f"Max retries reached: Implied volatility could not be found after {max_retries} attempts.")
+                return 0.0
         else:
             raise e
