@@ -2,8 +2,8 @@ matplotlib
 tk
 scipy
 fredapi
-numba
 sklearn
 httpx
 schwab-py
 tastytrade
+QuantLib-Python

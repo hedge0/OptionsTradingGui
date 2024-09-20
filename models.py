@@ -1,8 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 from scipy.interpolate import RBFInterpolator
-from math import log, sqrt, exp
-from numba import njit
+import QuantLib as ql
 
 def slv_model(k, params):
     """
@@ -145,96 +144,7 @@ def filter_strikes(x, S, num_stdev=1.25, two_sigma_move=False):
 
     return x[(x >= lower_bound) & (x <= upper_bound)]
 
-@njit
-def erf(x):
-    """
-    Approximation of the error function (erf) using a high-precision method.
-
-    Parameters:
-    - x (float): The input value.
-
-    Returns:
-    - float: The calculated error function value.
-    """
-    a1, a2, a3, a4, a5 = (
-        0.254829592,
-        -0.284496736,
-        1.421413741,
-        -1.453152027,
-        1.061405429,
-    )
-    p = 0.3275911
-
-    sign = 1 if x >= 0 else -1
-    x = abs(x)
-    
-    t = 1.0 / (1.0 + p * x)
-    y = 1.0 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * np.exp(-x * x))
-
-    return sign * y
-
-@njit
-def normal_cdf(x):
-    """
-    Approximation of the cumulative distribution function (CDF) for a standard normal distribution.
-
-    Parameters:
-    - x (float): The input value.
-
-    Returns:
-    - float: The CDF value.
-    """
-    return 0.5 * (1.0 + erf(x / np.sqrt(2.0)))
-
-@njit
-def barone_adesi_whaley_american_option_price(S, K, T, r, sigma, q=0.0, option_type='calls'):
-    """
-    Calculate the price of an American option using the Barone-Adesi Whaley model with dividends.
-
-    Args:
-        S (float): Current stock price.
-        K (float): Strike price of the option.
-        T (float): Time to expiration in years.
-        r (float): Risk-free interest rate.
-        sigma (float): Implied volatility.
-        q (float, optional): Continuous dividend yield. Defaults to 0.0.
-        option_type (str, optional): Type of option ('calls' or 'puts'). Defaults to 'calls'.
-
-    Returns:
-        float: The calculated option price.
-    """
-    M = 2 * (r - q) / sigma**2
-    n = 2 * (r - q - 0.5 * sigma**2) / sigma**2
-    q2 = (-(n - 1) - sqrt((n - 1)**2 + 4 * M)) / 2
-    
-    d1 = (log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * sqrt(T))
-    d2 = d1 - sigma * sqrt(T)
-    
-    if option_type == 'calls':
-        BAW = S * exp(-q * T) * normal_cdf(d1) - K * exp(-r * T) * normal_cdf(d2)
-        if q2 < 0:
-            return BAW
-        S_critical = K / (1 - 1/q2)
-        if S >= S_critical:
-            return S - K
-        else:
-            A2 = (S_critical - K) * (S_critical**-q2)
-            return BAW + A2 * (S/S_critical)**q2
-    elif option_type == 'puts':
-        BAW = K * exp(-r * T) * normal_cdf(-d2) - S * exp(-q * T) * normal_cdf(-d1)
-        if q2 < 0:
-            return BAW
-        S_critical = K / (1 - 1/q2)
-        if S <= S_critical:
-            return K - S
-        else:
-            A2 = (K - S_critical) * (S_critical**-q2)
-            return BAW + A2 * (S/S_critical)**q2
-    else:
-        raise ValueError("option_type must be 'calls' or 'puts'.")
-
-@njit
-def calculate_implied_volatility_baw(option_price, S, K, r, T, q=0.0, option_type='calls', max_iterations=100, tolerance=1e-8):
+def calculate_iv_quantlib(option_price, S, K, r, T, q, option_type='calls', upper_bound=10.0):
     """
     Calculate the implied volatility using the Barone-Adesi Whaley model with dividends.
 
@@ -246,28 +156,84 @@ def calculate_implied_volatility_baw(option_price, S, K, r, T, q=0.0, option_typ
         T (float): Time to expiration in years.
         q (float, optional): Continuous dividend yield. Defaults to 0.0.
         option_type (str, optional): Type of option ('calls' or 'puts'). Defaults to 'calls'.
-        max_iterations (int, optional): Maximum number of iterations for the bisection method. Defaults to 100.
-        tolerance (float, optional): Convergence tolerance. Defaults to 1e-8.
+        upper_bound (float, optional): Upper bound for volatility search range. Defaults to 10.0.
 
     Returns:
         float: The implied volatility.
     """
-    lower_vol = 0.0001
-    upper_vol = 2.0
-    
-    for i in range(max_iterations):
-        mid_vol = (lower_vol + upper_vol) / 2
-        price = barone_adesi_whaley_american_option_price(S, K, T, r, mid_vol, q, option_type)
-        
-        if abs(price - option_price) < tolerance:
-            return mid_vol
-        
-        if price > option_price:
-            upper_vol = mid_vol
-        else:
-            lower_vol = mid_vol
-        
-        if upper_vol - lower_vol < tolerance and upper_vol >= 2.0:
-            upper_vol *= 2.0
+    spot_price = ql.SimpleQuote(S)
+    strike_price = K
+    risk_free_rate = ql.SimpleQuote(r)
+    dividend_yield = ql.SimpleQuote(q)
+    volatility = ql.SimpleQuote(0.2)
 
-    return mid_vol
+    expiration_date = ql.Date().todaysDate() + int(T * 365)
+    payoff = ql.PlainVanillaPayoff(ql.Option.Call if option_type == 'calls' else ql.Option.Put, strike_price)
+    exercise = ql.AmericanExercise(ql.Date().todaysDate(), expiration_date)
+
+    process = ql.BlackScholesMertonProcess(
+        ql.QuoteHandle(spot_price),
+        ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), ql.QuoteHandle(dividend_yield), ql.Actual365Fixed())),
+        ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), ql.QuoteHandle(risk_free_rate), ql.Actual365Fixed())),
+        ql.BlackVolTermStructureHandle(ql.BlackConstantVol(0, ql.NullCalendar(), ql.QuoteHandle(volatility), ql.Actual365Fixed()))
+    )
+
+    option = ql.VanillaOption(payoff, exercise)
+    option.setPricingEngine(ql.BaroneAdesiWhaleyApproximationEngine(process))
+
+    try:
+        iv = option.impliedVolatility(option_price, process, 1e-8, 100, 0.2, upper_bound)
+    except RuntimeError as e:
+        if 'root not bracketed' in str(e):
+            return calculate_iv_quantlib(option_price, S, K, r, T, q, option_type, upper_bound * 10)
+        else:
+            raise e
+
+    return iv
+
+def calculate_option_price_quantlib(S, K, r, T, q, sigma, option_type='calls', american=False):
+    """
+    Calculate the option price using QuantLib.
+
+    Args:
+        S (float): Current stock price.
+        K (float): Strike price of the option.
+        r (float): Risk-free interest rate.
+        T (float): Time to expiration in years.
+        q (float): Continuous dividend yield.
+        sigma (float): Implied volatility.
+        option_type (str, optional): Type of option ('calls' or 'puts'). Defaults to 'calls'.
+        american (bool, optional): If True, use American exercise, otherwise use European. Defaults to False.
+
+    Returns:
+        float: The option price (NPV).
+    """
+    spot_price = ql.SimpleQuote(S)
+    strike_price = K
+    risk_free_rate = ql.SimpleQuote(r)
+    dividend_yield = ql.SimpleQuote(q)
+    volatility = ql.SimpleQuote(sigma)
+
+    expiration_date = ql.Date().todaysDate() + int(T * 365)
+    payoff = ql.PlainVanillaPayoff(ql.Option.Call if option_type == 'calls' else ql.Option.Put, strike_price)
+
+    if american:
+        exercise = ql.AmericanExercise(ql.Date().todaysDate(), expiration_date)
+    else:
+        exercise = ql.EuropeanExercise(expiration_date)
+
+    process = ql.BlackScholesMertonProcess(
+        ql.QuoteHandle(spot_price),
+        ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), ql.QuoteHandle(dividend_yield), ql.Actual365Fixed())),
+        ql.YieldTermStructureHandle(ql.FlatForward(0, ql.NullCalendar(), ql.QuoteHandle(risk_free_rate), ql.Actual365Fixed())),
+        ql.BlackVolTermStructureHandle(ql.BlackConstantVol(0, ql.NullCalendar(), ql.QuoteHandle(volatility), ql.Actual365Fixed()))
+    )
+
+    option = ql.VanillaOption(payoff, exercise)
+
+    if american:
+        option.setPricingEngine(ql.BaroneAdesiWhaleyApproximationEngine(process))
+    else:
+        option.setPricingEngine(ql.AnalyticEuropeanEngine(process))
+
+    return option.NPV()
