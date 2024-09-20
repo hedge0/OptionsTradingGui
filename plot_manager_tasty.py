@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tastytrade import DXLinkStreamer
 from tastytrade.dxfeed import EventType
-from models import filter_strikes, slv_model, rfv_model, sabr_model, rbf_model, fit_model, calculate_iv_quantlib, calculate_option_price_quantlib
+from models import filter_strikes, slv_model, rfv_model, sabr_model, rbf_model, fit_model, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
 class PlotManagerTasty:
@@ -71,8 +71,19 @@ class PlotManagerTasty:
         self.canvas.mpl_connect('button_press_event', lambda event: on_press(event, self))
         self.canvas.mpl_connect('button_release_event', lambda event: on_release(event, self))
 
+        self.precompile_numba_functions()
+
         # Add stop_event for graceful shutdown
         self.stop_event = asyncio.Event()
+
+    def precompile_numba_functions(self):
+        """
+        Precompile Numba functions to improve performance.
+
+        This method calls Numba-compiled functions with sample data to ensure they are precompiled,
+        reducing latency during actual execution.
+        """
+        calculate_implied_volatility_baw(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
 
     def create_dropdown_and_button(self):
         """
@@ -224,7 +235,7 @@ class PlotManagerTasty:
         # Process original sorted_data_lr (calculate IVs for bid, ask, and mid prices using the selected pricing model)
         for strike, prices in sorted_data.items():
             sorted_data[strike] = {
-                price_type: calculate_iv_quantlib(price, S, strike, r, T, 0.0, option_type=self.option_type)
+                price_type: calculate_implied_volatility_baw(price, S, strike, r, T, option_type=self.option_type)
                 for price_type, price in prices.items()
             }
 
@@ -317,7 +328,7 @@ class PlotManagerTasty:
                 closest_index = np.argmin(np.abs(fine_x - x_value))
                 interpolated_y_value = interpolated_y[closest_index]
                 y_mid_value = data_dict[x_value]['mid']
-                option_price = calculate_option_price_quantlib(S, x_value, r, T, 0.0, interpolated_y_value, option_type=self.option_type, american=True)
+                option_price = barone_adesi_whaley_american_option_price(S, x_value, T, r, interpolated_y_value, option_type=self.option_type)
                 diff = abs(y_mid_value - option_price)
                 
                 if diff > mispricing_value:
@@ -504,3 +515,4 @@ def open_plot_manager_tasty(ticker, session, expiration_to_strikes_map, streamer
     root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
     stream_thread.join()
+    
