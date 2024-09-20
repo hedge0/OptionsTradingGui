@@ -211,25 +211,31 @@ def barone_adesi_whaley_american_option_price(S, K, T, r, sigma, q=0.0, option_t
     d2 = d1 - sigma * sqrt(T)
     
     if option_type == 'calls':
-        BAW = S * exp(-q * T) * normal_cdf(d1) - K * exp(-r * T) * normal_cdf(d2)
+        european_price = S * exp(-q * T) * normal_cdf(d1) - K * exp(-r * T) * normal_cdf(d2)
+        if q >= r:
+            return european_price
         if q2 < 0:
-            return BAW
-        S_critical = K / (1 - 1/q2)
+            return european_price
+        S_critical = K / (1 - 1 / q2)
         if S >= S_critical:
             return S - K
         else:
             A2 = (S_critical - K) * (S_critical**-q2)
-            return BAW + A2 * (S/S_critical)**q2
+            return european_price + A2 * (S / S_critical)**q2
+    
     elif option_type == 'puts':
-        BAW = K * exp(-r * T) * normal_cdf(-d2) - S * exp(-q * T) * normal_cdf(-d1)
+        european_price = K * exp(-r * T) * normal_cdf(-d2) - S * exp(-q * T) * normal_cdf(-d1)
+        if q >= r:
+            return european_price
         if q2 < 0:
-            return BAW
-        S_critical = K / (1 - 1/q2)
+            return european_price
+        S_critical = K / (1 + 1 / q2)
         if S <= S_critical:
             return K - S
         else:
             A2 = (K - S_critical) * (S_critical**-q2)
-            return BAW + A2 * (S/S_critical)**q2
+            return european_price + A2 * (S / S_critical)**q2
+    
     else:
         raise ValueError("option_type must be 'calls' or 'puts'.")
 
@@ -238,36 +244,36 @@ def calculate_implied_volatility_baw(option_price, S, K, r, T, q=0.0, option_typ
     """
     Calculate the implied volatility using the Barone-Adesi Whaley model with dividends.
 
-    Args:
-        option_price (float): Observed option price (mid-price).
-        S (float): Current stock price.
-        K (float): Strike price of the option.
-        r (float): Risk-free interest rate.
-        T (float): Time to expiration in years.
-        q (float, optional): Continuous dividend yield. Defaults to 0.0.
-        option_type (str, optional): Type of option ('calls' or 'puts'). Defaults to 'calls'.
-        max_iterations (int, optional): Maximum number of iterations for the bisection method. Defaults to 100.
-        tolerance (float, optional): Convergence tolerance. Defaults to 1e-8.
+    Parameters:
+    - option_price (float): Observed option price (mid-price).
+    - S (float): Current stock price.
+    - K (float): Strike price of the option.
+    - r (float): Risk-free interest rate.
+    - T (float): Time to expiration in years.
+    - q (float, optional): Continuous dividend yield. Defaults to 0.0.
+    - option_type (str, optional): Type of option ('calls' or 'puts'). Defaults to 'calls'.
+    - max_iterations (int, optional): Maximum number of iterations for the bisection method. Defaults to 100.
+    - tolerance (float, optional): Convergence tolerance. Defaults to 1e-8.
 
     Returns:
-        float: The implied volatility.
+    - float: The implied volatility.
     """
-    lower_vol = 0.0001
-    upper_vol = 2.0
-    
+    lower_vol = 1e-5
+    upper_vol = 5.0
+
     for i in range(max_iterations):
         mid_vol = (lower_vol + upper_vol) / 2
         price = barone_adesi_whaley_american_option_price(S, K, T, r, mid_vol, q, option_type)
-        
+
         if abs(price - option_price) < tolerance:
             return mid_vol
-        
+
         if price > option_price:
             upper_vol = mid_vol
         else:
             lower_vol = mid_vol
-        
-        if upper_vol - lower_vol < tolerance and upper_vol >= 2.0:
-            upper_vol *= 2.0
+
+        if upper_vol - lower_vol < tolerance:
+            break
 
     return mid_vol
