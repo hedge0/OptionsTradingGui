@@ -234,7 +234,6 @@ def calculate_iv_quantlib(option_price, S, K, r, T, q, option_type='calls', uppe
         return iv
     except RuntimeError as e:
         if 'root not bracketed' in str(e):
-            # Incrementally increase the upper bound and retry, but cap the retries to avoid infinite recursion.
             if retries < max_retries:
                 return calculate_iv_quantlib(option_price, S, K, r, T, q, option_type, upper_bound * 2, retries + 1, max_retries)
             else:
