@@ -51,6 +51,7 @@ class PlotManagerSchwab:
         self.press_event = None
         self.quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None})
         self.underlying_price = 0.0
+        self.div_yield = 0.0
 
         # Configure the dropdown style
         style = ttk.Style()
@@ -235,7 +236,7 @@ class PlotManagerSchwab:
         # Process original sorted_data_lr (calculate IVs for bid, ask, and mid prices using the selected pricing model)
         for strike, prices in sorted_data.items():
             sorted_data[strike] = {
-                price_type: calculate_implied_volatility_baw(price, S, strike, r, T, q=0.0, option_type=self.option_type)
+                price_type: calculate_implied_volatility_baw(price, S, strike, r, T, q=self.div_yield, option_type=self.option_type)
                 for price_type, price in prices.items()
             }
 
@@ -328,7 +329,7 @@ class PlotManagerSchwab:
                 closest_index = np.argmin(np.abs(fine_x - x_value))
                 interpolated_y_value = interpolated_y[closest_index]
                 y_mid_value = data_dict[x_value]['mid']
-                option_price = barone_adesi_whaley_american_option_price(S, x_value, T, r, interpolated_y_value, q=0.0, option_type=self.option_type)
+                option_price = barone_adesi_whaley_american_option_price(S, x_value, T, r, interpolated_y_value, q=self.div_yield, option_type=self.option_type)
                 diff = abs(y_mid_value - option_price)
                 
                 if diff > mispricing_value:
@@ -385,6 +386,14 @@ class PlotManagerSchwab:
             callback_url=self.callback_url,
             asyncio=True
         )
+
+        try:
+            respDiv = await session.get_quote(self.ticker)
+            assert respDiv.status_code == httpx.codes.OK
+            div = respDiv.json()
+            self.div_yield = float(div[self.ticker]["fundamental"]["divYield"]) / 100
+        except Exception as e:
+            print(f"An unexpected error occurred in options stream: {e}")
 
         option_date = datetime.strptime(self.selected_date, "%Y-%m-%d").date()
         contract_type = session.Options.ContractType.CALL if self.option_type == "calls" else session.Options.ContractType.PUT
