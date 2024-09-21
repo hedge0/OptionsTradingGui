@@ -6,4 +6,4 @@ sklearn
 httpx
 schwab-py
 tastytrade
-QuantLib-Python
+numba
