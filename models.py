@@ -64,7 +64,7 @@ def rbf_model(k, y, epsilon=None, smoothing=0.0):
     rbf = RBFInterpolator(k[:, np.newaxis], y, kernel='multiquadric', epsilon=epsilon, smoothing=smoothing)
     return rbf
 
-def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WRE"):
+def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WLS"):
     """
     Objective function to minimize during model fitting.
 
@@ -95,9 +95,9 @@ def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WRE"):
         residuals = (model(k, params) - y_mid) / y_mid
         return np.sum(residuals ** 2)
     else:
-        raise ValueError("Unknown method. Choose 'WLS', 'LS', 'RE', or 'WRE'.")
+        raise ValueError("Unknown method. Choose 'WLS', 'LS', or 'RE'.")
 
-def fit_model(x, y_mid, y_bid, y_ask, model, method="WRE"):
+def fit_model(x, y_mid, y_bid, y_ask, model, method="WLS"):
     """
     Fit the chosen volatility model to the market data.
 
@@ -107,7 +107,7 @@ def fit_model(x, y_mid, y_bid, y_ask, model, method="WRE"):
         y_bid (array-like): Bid prices of the options.
         y_ask (array-like): Ask prices of the options.
         model (function): The volatility model to be fitted.
-        method (str, optional): The method for the objective function. Defaults to "WRE".
+        method (str, optional): The method for the objective function. Defaults to "WLS".
 
     Returns:
         list: The fitted model parameters.
