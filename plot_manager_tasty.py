@@ -404,7 +404,7 @@ class PlotManagerTasty:
         ask_price = quote.askPrice
         strike_price = self.streamer_to_strike_map.get(event_symbol)
         if strike_price is not None and bid_price is not None and ask_price is not None:
-            mid_price = float((bid_price + ask_price) / 2)
+            mid_price = round(float((bid_price + ask_price) / 2), 3)
             self.quote_data[float(strike_price)] = {
                 "bid": float(bid_price),
                 "ask": float(ask_price),
