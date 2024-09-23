@@ -43,7 +43,7 @@ class PlotManagerSchwab:
         self.risk_free_rate = risk_free_rate / 100
         self.ticker = ticker
 
-        self.root.title(f"{self.ticker} - {self.selected_date} - {self.option_type.capitalize()}")
+        self.root.title(f"{self.ticker} - {self.selected_date} - {self.option_type.capitalize()} - Schwab")
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
