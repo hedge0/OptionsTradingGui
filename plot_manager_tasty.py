@@ -12,7 +12,9 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tastytrade import DXLinkStreamer
 from tastytrade.dxfeed import EventType
-from models import filter_strikes, slv_model, rfv_model, sabr_model, rbf_model, fit_model, calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price
+
+from models import calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price
+from interpolations import slv_model, rfv_model, sabr_model, rbf_model, fit_model
 from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
 class PlotManagerTasty:
@@ -84,6 +86,10 @@ class PlotManagerTasty:
         reducing latency during actual execution.
         """
         calculate_implied_volatility_baw(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
+        k = np.array([0.1])
+        slv_model(k, [0.1, 0.2, 0.3, 0.4, 0.5])
+        rfv_model(k, [0.1, 0.2, 0.3, 0.4, 0.5])
+        sabr_model(k, [0.1, 0.2, 0.3, 0.4, 0.5])
 
     def create_dropdown_and_button(self):
         """
@@ -244,7 +250,7 @@ class PlotManagerTasty:
 
         strike_prices = np.array(list(sorted_data.keys()))
         if strike_filter_value > 0.0:
-            x = filter_strikes(strike_prices, S, num_stdev=strike_filter_value)
+            x = self.filter_strikes(strike_prices, S, num_stdev=strike_filter_value)
         else:
             x = strike_prices
             
@@ -313,8 +319,8 @@ class PlotManagerTasty:
             rbf_interpolated_y = rbf_interpolator(np.log(fine_x_normalized).reshape(-1, 1))
             rfv_interpolated_y = rfv_model(np.log(fine_x_normalized), rfv_params)
             
-            # Weighted Averaging: RFV 70%, RBF 30%
-            interpolated_y = 0.70 * rfv_interpolated_y + 0.30 * rbf_interpolated_y
+            # Weighted Averaging: RFV 75%, RBF 25%
+            interpolated_y = 0.75 * rfv_interpolated_y + 0.25 * rbf_interpolated_y
         else:
             # Other models like SLV, RFV, SABR
             params = fit_model(x_normalized, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
@@ -373,6 +379,28 @@ class PlotManagerTasty:
         )
 
         self.canvas.draw()
+
+    def filter_strikes(self, x, S, num_stdev=1.25, two_sigma_move=False):
+        """
+        Filter strike prices around the underlying asset's price.
+
+        Args:
+            x (array-like): Array of strike prices.
+            S (float): Current underlying price.
+            num_stdev (float, optional): Number of standard deviations for filtering. Defaults to 1.25.
+            two_sigma_move (bool, optional): Adjust upper bound for a 2-sigma move. Defaults to False.
+
+        Returns:
+            array-like: Filtered array of strike prices within the specified range.
+        """
+        stdev = np.std(x)
+        lower_bound = S - num_stdev * stdev
+        upper_bound = S + num_stdev * stdev
+
+        if two_sigma_move:
+            upper_bound = S + 2 * stdev
+
+        return x[(x >= lower_bound) & (x <= upper_bound)]
 
     def update_mid_price(self, quote):
         """
