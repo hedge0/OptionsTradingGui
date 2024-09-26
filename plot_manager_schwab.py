@@ -151,7 +151,7 @@ class PlotManagerSchwab:
 
         # Strike filter entry field
         tk.Label(selection_and_metrics_frame, text="Strike Filter:").pack(side=tk.LEFT, padx=5)
-        self.strike_filter_var = tk.StringVar(value="0.0")
+        self.strike_filter_var = tk.StringVar(value="2.0")
         self.strike_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.strike_filter_var, width=10)
         self.strike_filter_entry.pack(side=tk.LEFT, padx=5)
 
@@ -161,12 +161,12 @@ class PlotManagerSchwab:
         self.liquidity_filter_checkbox.pack(side=tk.LEFT, padx=5)
 
         # Bid checkbox
-        self.bid_var = tk.BooleanVar(value=True)
+        self.bid_var = tk.BooleanVar(value=False)
         self.bid_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Bid", variable=self.bid_var)
         self.bid_checkbox.pack(side=tk.LEFT, padx=5)
 
         # Ask checkbox
-        self.ask_var = tk.BooleanVar(value=True)
+        self.ask_var = tk.BooleanVar(value=False)
         self.ask_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Ask", variable=self.ask_var)
         self.ask_checkbox.pack(side=tk.LEFT, padx=5)
 
