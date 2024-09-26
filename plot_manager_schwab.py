@@ -51,7 +51,7 @@ class PlotManagerSchwab:
         self.selected_method = tk.StringVar(value="Hybrid")
         self.selected_objective = tk.StringVar(value="WLS")
         self.press_event = None
-        self.quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None})
+        self.quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None, "open_interest": None})
         self.underlying_price = 0.0
         self.div_yield = 0.0
 
@@ -243,6 +243,7 @@ class PlotManagerSchwab:
         for strike, prices in sorted_data.items():
             sorted_data[strike] = {
                 price_type: calculate_implied_volatility_baw(price, S, strike, r, T, q=self.div_yield, option_type=self.option_type)
+                if price_type != 'open_interest' else price
                 for price_type, price in prices.items()
             }
 
@@ -373,7 +374,7 @@ class PlotManagerSchwab:
         self.underlying_price_line = self.ax.axvline(
             x=self.underlying_price, 
             color='#add8e6', 
-            linestyle='-', 
+            linestyle='--', 
             linewidth=1, 
             alpha=0.5,
             label='Underlying Price'
@@ -442,13 +443,15 @@ class PlotManagerSchwab:
                         option_json = chain[chain_primary_key][chain_secondary_key][strike_price][0]
                         bid_price = option_json["bid"]
                         ask_price = option_json["ask"]
+                        open_interest = option_json["openInterest"]
 
-                        if strike_price is not None and bid_price is not None and ask_price is not None:
+                        if strike_price is not None and bid_price is not None and ask_price is not None and open_interest is not None:
                             mid_price = round(float((bid_price + ask_price) / 2), 3)
                             self.quote_data[float(strike_price)] = {
                                 "bid": float(bid_price),
                                 "ask": float(ask_price),
-                                "mid": float(mid_price)
+                                "mid": float(mid_price),
+                                "open_interest": float(open_interest)
                             }
 
                     self.update_plot()

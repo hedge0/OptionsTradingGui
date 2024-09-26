@@ -372,7 +372,7 @@ class PlotManagerTasty:
         self.underlying_price_line = self.ax.axvline(
             x=self.underlying_price, 
             color='#add8e6', 
-            linestyle='-', 
+            linestyle='--', 
             linewidth=1, 
             alpha=0.5,
             label='Underlying Price'
