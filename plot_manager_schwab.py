@@ -143,6 +143,12 @@ class PlotManagerSchwab:
         self.mispricing_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.mispricing_var, width=10)
         self.mispricing_entry.pack(side=tk.LEFT, padx=5)
 
+        # Open Interest filter entry field
+        tk.Label(selection_and_metrics_frame, text="Open Interest:").pack(side=tk.LEFT, padx=5)
+        self.open_interest_var = tk.StringVar(value="0.0")
+        self.open_interest_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.open_interest_var, width=10)
+        self.open_interest_entry.pack(side=tk.LEFT, padx=5)
+
         # Strike filter entry field
         tk.Label(selection_and_metrics_frame, text="Strike Filter:").pack(side=tk.LEFT, padx=5)
         self.strike_filter_var = tk.StringVar(value="1.5")
@@ -197,9 +203,9 @@ class PlotManagerSchwab:
         data_dict = self.quote_data
         sorted_data = dict(sorted(data_dict.items()))
 
-        strike_filter_value, mispricing_value, epsilon_value = self.validate_user_inputs()
-        if strike_filter_value is None or mispricing_value is None or epsilon_value is None:
-            return    
+        strike_filter_value, mispricing_value, open_interest_value, epsilon_value = self.validate_user_inputs()
+        if strike_filter_value is None or mispricing_value is None or open_interest_value is None or epsilon_value is None:
+            return
 
         S = self.underlying_price
         current_time = datetime.now()
@@ -230,11 +236,6 @@ class PlotManagerSchwab:
         y_ask = np.array([prices['ask'] for prices in sorted_data.values()])
         y_mid = np.array([prices['mid'] for prices in sorted_data.values()])
         open_interest = np.array([prices['open_interest'] for prices in sorted_data.values()])
-        
-        if len(x) == 0:
-            messagebox.showwarning("No Data", "All data points were filtered out. Adjust the spread filter.")
-            return
-        self.remove_existing_plot_elements()
 
         # Normalize X values here
         scaler = MinMaxScaler()
@@ -273,6 +274,20 @@ class PlotManagerSchwab:
             interpolated_y = model(np.log(fine_x_normalized), params)
 
         fine_x = np.linspace(np.min(x), np.max(x), 800)
+
+        if open_interest_value > 0.0:
+            mask = open_interest > open_interest_value
+            x = x[mask]
+            y_bid = y_bid[mask]
+            y_ask = y_ask[mask]
+            y_mid = y_mid[mask]
+            open_interest = open_interest[mask]
+
+        if len(x) == 0:
+            messagebox.showwarning("No Data", "All data points were filtered out. Adjust the spread filter.")
+            return
+        self.remove_existing_plot_elements()
+
         outliers_indices = []
         if mispricing_value > 0.0:
             for i, x_value in enumerate(x):
@@ -327,11 +342,11 @@ class PlotManagerSchwab:
 
     def validate_user_inputs(self):
         """
-        Validates the strike filter, mispricing, and epsilon values entered by the user.
+        Validates the strike filter, mispricing, open interest, and epsilon values entered by the user.
         
         Returns:
             tuple: A tuple containing the validated values for strike_filter_value, mispricing_value, 
-            and epsilon_value. If any validation fails, None is returned for all.
+            open_interest_value, and epsilon_value. If any validation fails, None is returned for all.
         """
         try:
             strike_filter_value = float(self.strike_filter_var.get())
@@ -339,7 +354,7 @@ class PlotManagerSchwab:
                 raise ValueError("Strike Filter must be 0.0 or above.")
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Strike Filter (0.0 or above).")
-            return None, None, None
+            return None, None, None, None
 
         try:
             mispricing_value = float(self.mispricing_var.get())
@@ -347,7 +362,15 @@ class PlotManagerSchwab:
                 raise ValueError("Mispricing must be 0.0 or above.")
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Mispricing (0.0 or above).")
-            return None, None, None
+            return None, None, None, None
+
+        try:
+            open_interest_value = float(self.open_interest_var.get())
+            if open_interest_value < 0.0:
+                raise ValueError("Open Interest must be 0.0 or above.")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Open Interest (0.0 or above).")
+            return None, None, None, None
 
         try:
             epsilon_value = float(self.epsilon_var.get())
@@ -355,9 +378,9 @@ class PlotManagerSchwab:
                 raise ValueError("Epsilon must be 0.0 or above.")
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Epsilon (0.0 or above).")
-            return None, None, None
+            return None, None, None, None
 
-        return strike_filter_value, mispricing_value, epsilon_value
+        return strike_filter_value, mispricing_value, open_interest_value, epsilon_value
 
     def filter_strikes(self, x, S, num_stdev=1.25, two_sigma_move=False):
         """
