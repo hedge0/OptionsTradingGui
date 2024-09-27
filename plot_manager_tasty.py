@@ -144,7 +144,7 @@ class PlotManagerTasty:
 
         # Strike filter entry field
         tk.Label(selection_and_metrics_frame, text="Strike Filter:").pack(side=tk.LEFT, padx=5)
-        self.strike_filter_var = tk.StringVar(value="2.0")
+        self.strike_filter_var = tk.StringVar(value="1.5")
         self.strike_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.strike_filter_var, width=10)
         self.strike_filter_entry.pack(side=tk.LEFT, padx=5)
 
