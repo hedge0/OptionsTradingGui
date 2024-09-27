@@ -492,7 +492,7 @@ class PlotManagerSchwab:
                 except Exception as e:
                     print(f"An unexpected error occurred in options stream: {e}")
 
-                await asyncio.sleep(2.5)
+                await asyncio.sleep(3)
 
         self.tasks = [
             asyncio.create_task(stream_options())
