@@ -196,27 +196,9 @@ class PlotManagerTasty:
         data_dict = self.quote_data
         sorted_data = dict(sorted(data_dict.items()))
 
-        try:
-            strike_filter_value = float(self.strike_filter_var.get())
-            if strike_filter_value < 0.0:
-                raise ValueError("Strike Filter must be 0.0 or above.")
-        except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter a valid number for Strike Filter (0.0 or above).")
-            return
-        try:
-            mispricing_value = float(self.mispricing_var.get())
-            if mispricing_value < 0.0:
-                raise ValueError("Mispricing must be 0.0 or above.")
-        except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter a valid number for Mispricing (0.0 or above).")
-            return
-        try:
-            epsilon_value = float(self.epsilon_var.get())
-            if epsilon_value < 0.0:
-                raise ValueError("Epsilon must be 0.0 or above.")
-        except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter a valid number for Epsilon (0.0 or above).")
-            return    
+        strike_filter_value, mispricing_value, epsilon_value = self.validate_user_inputs()
+        if strike_filter_value is None or mispricing_value is None or epsilon_value is None:
+            return 
 
         S = self.underlying_price
         current_time = datetime.now()
@@ -238,9 +220,6 @@ class PlotManagerTasty:
                 for price_type, price in prices.items()
             }
 
-
-
-
         if self.liquidity_filter_var.get():
             sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['mid'] > 0.005}
 
@@ -252,28 +231,7 @@ class PlotManagerTasty:
         if len(x) == 0:
             messagebox.showwarning("No Data", "All data points were filtered out. Adjust the spread filter.")
             return
-        if hasattr(self, 'underlying_price_line'):
-            self.underlying_price_line.remove()
-        if hasattr(self, 'midpoints') and self.midpoints:
-            self.midpoints.remove()
-            self.midpoints = None
-        if hasattr(self, 'outliers') and self.outliers:
-            self.outliers.remove()
-            self.outliers = None
-        if hasattr(self, 'bids') and self.bids:
-            self.bids.remove()
-            self.bids = None
-        if hasattr(self, 'asks') and self.asks:
-            self.asks.remove()
-            self.asks = None
-        if hasattr(self, 'bid_lines'):
-            for line in self.bid_lines:
-                line.remove()
-            self.bid_lines = []
-        if hasattr(self, 'ask_lines'):
-            for line in self.ask_lines:
-                line.remove()
-            self.ask_lines = []
+        self.remove_existing_plot_elements()
 
         # Normalize X values here
         scaler = MinMaxScaler()
@@ -364,6 +322,40 @@ class PlotManagerTasty:
 
         self.canvas.draw()
 
+    def validate_user_inputs(self):
+        """
+        Validates the strike filter, mispricing, and epsilon values entered by the user.
+        
+        Returns:
+            tuple: A tuple containing the validated values for strike_filter_value, mispricing_value, 
+            and epsilon_value. If any validation fails, None is returned for all.
+        """
+        try:
+            strike_filter_value = float(self.strike_filter_var.get())
+            if strike_filter_value < 0.0:
+                raise ValueError("Strike Filter must be 0.0 or above.")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Strike Filter (0.0 or above).")
+            return None, None, None
+
+        try:
+            mispricing_value = float(self.mispricing_var.get())
+            if mispricing_value < 0.0:
+                raise ValueError("Mispricing must be 0.0 or above.")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Mispricing (0.0 or above).")
+            return None, None, None
+
+        try:
+            epsilon_value = float(self.epsilon_var.get())
+            if epsilon_value < 0.0:
+                raise ValueError("Epsilon must be 0.0 or above.")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Epsilon (0.0 or above).")
+            return None, None, None
+
+        return strike_filter_value, mispricing_value, epsilon_value
+
     def filter_strikes(self, x, S, num_stdev=1.25, two_sigma_move=False):
         """
         Filter strike prices around the underlying asset's price.
@@ -385,6 +377,40 @@ class PlotManagerTasty:
             upper_bound = S + 2 * stdev
 
         return x[(x >= lower_bound) & (x <= upper_bound)]
+    
+    def remove_existing_plot_elements(self):
+        """
+        Removes existing plot elements such as the underlying price line, midpoints, outliers, 
+        bids, asks, and bid/ask lines, if they exist.
+        """
+        if hasattr(self, 'underlying_price_line'):
+            self.underlying_price_line.remove()
+
+        if hasattr(self, 'midpoints') and self.midpoints:
+            self.midpoints.remove()
+            self.midpoints = None
+
+        if hasattr(self, 'outliers') and self.outliers:
+            self.outliers.remove()
+            self.outliers = None
+
+        if hasattr(self, 'bids') and self.bids:
+            self.bids.remove()
+            self.bids = None
+
+        if hasattr(self, 'asks') and self.asks:
+            self.asks.remove()
+            self.asks = None
+
+        if hasattr(self, 'bid_lines'):
+            for line in self.bid_lines:
+                line.remove()
+            self.bid_lines = []
+
+        if hasattr(self, 'ask_lines'):
+            for line in self.ask_lines:
+                line.remove()
+            self.ask_lines = []
 
     def update_mid_price(self, quote):
         """
