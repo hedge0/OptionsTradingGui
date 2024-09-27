@@ -116,7 +116,7 @@ def calculate_implied_volatility_baw(option_price, S, K, r, T, q=0.0, option_typ
     - float: The implied volatility.
     """
     lower_vol = 1e-5
-    upper_vol = 5.0
+    upper_vol = 10.0
 
     for i in range(max_iterations):
         mid_vol = (lower_vol + upper_vol) / 2
