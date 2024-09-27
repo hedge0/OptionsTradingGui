@@ -150,7 +150,7 @@ class PlotManagerTasty:
 
         # Liquidity filter checkbox
         self.liquidity_filter_var = tk.BooleanVar(value=True)
-        self.liquidity_filter_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Liquidity Filter", variable=self.liquidity_filter_var)
+        self.liquidity_filter_checkbox = tk.Checkbutton(selection_and_metrics_frame, text="Penny Filter", variable=self.liquidity_filter_var)
         self.liquidity_filter_checkbox.pack(side=tk.LEFT, padx=5)
 
         # Bid checkbox
