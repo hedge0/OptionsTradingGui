@@ -293,7 +293,7 @@ class PlotManagerSchwab:
             # RBF Model
             smoothing = 0.000000000001
             interpolator = rbf_model(np.log(x_normalized), y_mid, epsilon=epsilon_value, smoothing=smoothing)
-            fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
+            fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 800)
             interpolated_y = interpolator(np.log(fine_x_normalized).reshape(-1, 1))
         elif self.selected_method.get() == "Hybrid":
             # Hybrid Model (average of RBF and RFV with specified weights)
@@ -301,7 +301,7 @@ class PlotManagerSchwab:
             rbf_interpolator = rbf_model(np.log(x_normalized), y_mid, epsilon=epsilon_value, smoothing=smoothing)
             rfv_params = fit_model(x_normalized, y_mid, y_bid, y_ask, rfv_model, method=self.selected_objective.get())
 
-            fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
+            fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 800)
             rbf_interpolated_y = rbf_interpolator(np.log(fine_x_normalized).reshape(-1, 1))
             rfv_interpolated_y = rfv_model(np.log(fine_x_normalized), rfv_params)
             
@@ -310,10 +310,10 @@ class PlotManagerSchwab:
         else:
             # Other models like SLV, RFV, SABR
             params = fit_model(x_normalized, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
-            fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 400)
+            fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 800)
             interpolated_y = model(np.log(fine_x_normalized), params)
 
-        fine_x = np.linspace(np.min(x), np.max(x), 400)
+        fine_x = np.linspace(np.min(x), np.max(x), 800)
         outliers_indices = []
         if mispricing_value > 0.0:
             for i, x_value in enumerate(x):
