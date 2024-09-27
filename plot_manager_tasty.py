@@ -142,12 +142,6 @@ class PlotManagerTasty:
         self.mispricing_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.mispricing_var, width=10)
         self.mispricing_entry.pack(side=tk.LEFT, padx=5)
 
-        # Max spread entry field
-        tk.Label(selection_and_metrics_frame, text="Max Spread:").pack(side=tk.LEFT, padx=5)
-        self.spread_filter_var = tk.StringVar(value="0.0")
-        self.spread_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.spread_filter_var, width=10)
-        self.spread_filter_entry.pack(side=tk.LEFT, padx=5)
-
         # Strike filter entry field
         tk.Label(selection_and_metrics_frame, text="Strike Filter:").pack(side=tk.LEFT, padx=5)
         self.strike_filter_var = tk.StringVar(value="2.0")
@@ -217,11 +211,6 @@ class PlotManagerTasty:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Mispricing (0.0 or above).")
             return
         try:
-            max_spread = float(self.spread_filter_var.get())
-        except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter a valid number for Max Bid-Ask Spread.")
-            return
-        try:
             epsilon_value = float(self.epsilon_var.get())
             if epsilon_value < 0.0:
                 raise ValueError("Epsilon must be 0.0 or above.")
@@ -259,12 +248,6 @@ class PlotManagerTasty:
         y_ask = np.array([prices['ask'] for prices in sorted_data.values()])
         y_mid = np.array([prices['mid'] for prices in sorted_data.values()])
         
-        if (max_spread > 0.0):
-            mask = (y_ask - y_bid) <= max_spread
-            x = x[mask]
-            y_mid = y_mid[mask]
-            y_bid = y_bid[mask]
-            y_ask = y_ask[mask]
         if len(x) == 0:
             messagebox.showwarning("No Data", "All data points were filtered out. Adjust the spread filter.")
             return
