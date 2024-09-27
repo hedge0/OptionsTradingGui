@@ -218,14 +218,18 @@ class PlotManagerTasty:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Epsilon (0.0 or above).")
             return    
 
-        if self.liquidity_filter_var.get():
-            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0}
-
         S = self.underlying_price
         current_time = datetime.now()
         expiration_time =datetime.combine(datetime.strptime(self.selected_date, '%Y-%m-%d'), datetime.min.time()) + timedelta(hours=16)
         T = (expiration_time - current_time).total_seconds() / (365 * 24 * 3600)
         r = self.risk_free_rate
+
+        if self.liquidity_filter_var.get():
+            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0}
+
+        if strike_filter_value > 0.0:
+            filtered_strikes = self.filter_strikes(np.array(list(sorted_data.keys())), S, num_stdev=strike_filter_value)
+            sorted_data = {strike: prices for strike, prices in sorted_data.items() if strike in filtered_strikes}
 
         # Process original sorted_data_lr (calculate IVs for bid, ask, and mid prices using the selected pricing model)
         for strike, prices in sorted_data.items():
@@ -234,16 +238,13 @@ class PlotManagerTasty:
                 for price_type, price in prices.items()
             }
 
+
+
+
         if self.liquidity_filter_var.get():
             sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['mid'] > 0.005}
 
-        strike_prices = np.array(list(sorted_data.keys()))
-        if strike_filter_value > 0.0:
-            x = self.filter_strikes(strike_prices, S, num_stdev=strike_filter_value)
-        else:
-            x = strike_prices
-            
-        sorted_data = {strike: prices for strike, prices in sorted_data.items() if strike in x}
+        x = np.array(list(sorted_data.keys()))
         y_bid = np.array([prices['bid'] for prices in sorted_data.values()])
         y_ask = np.array([prices['ask'] for prices in sorted_data.values()])
         y_mid = np.array([prices['mid'] for prices in sorted_data.values()])
