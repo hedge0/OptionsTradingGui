@@ -223,25 +223,7 @@ class PlotManagerSchwab:
             }
 
         if self.liquidity_filter_var.get():
-            sorted_items = list(sorted_data.items())
-
-            # Find the leftmost item with mid price > 0.005
-            left_index = 0
-            for i, (strike, prices) in enumerate(sorted_items):
-                if prices['mid'] > 0.005:
-                    left_index = i
-                    break
-
-            # Find the rightmost item with mid price > 0.005
-            right_index = len(sorted_items) - 1
-            for i in range(len(sorted_items) - 1, -1, -1):
-                strike, prices = sorted_items[i]
-                if prices['mid'] > 0.005:
-                    right_index = i
-                    break
-
-            sorted_data = dict(sorted_items[left_index:right_index + 1])
-            #sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['mid'] > 0.005}
+            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['mid'] > 0.005}
 
         x = np.array(list(sorted_data.keys())) 
         y_bid = np.array([prices['bid'] for prices in sorted_data.values()])
