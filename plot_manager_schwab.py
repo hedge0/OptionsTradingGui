@@ -260,6 +260,7 @@ class PlotManagerSchwab:
         y_bid = np.array([prices['bid'] for prices in sorted_data.values()])
         y_ask = np.array([prices['ask'] for prices in sorted_data.values()])
         y_mid = np.array([prices['mid'] for prices in sorted_data.values()])
+        open_interest = np.array([prices['open_interest'] for prices in sorted_data.values()])
         
         if (max_spread > 0.0):
             mask = (y_ask - y_bid) <= max_spread
@@ -267,6 +268,7 @@ class PlotManagerSchwab:
             y_mid = y_mid[mask]
             y_bid = y_bid[mask]
             y_ask = y_ask[mask]
+            open_interest = open_interest[mask]
         if len(x) == 0:
             messagebox.showwarning("No Data", "All data points were filtered out. Adjust the spread filter.")
             return
