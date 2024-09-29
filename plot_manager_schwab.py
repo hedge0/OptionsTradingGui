@@ -1,4 +1,5 @@
 import asyncio
+import time
 import httpx
 import nest_asyncio
 
@@ -222,25 +223,10 @@ class PlotManagerSchwab:
             sorted_data = {strike: prices for strike, prices in sorted_data.items() if strike in filtered_strikes}
 
         for strike, prices in sorted_data.items():
-            mid_vol = calculate_implied_volatility_baw(
-                prices['mid'], 
-                S, 
-                strike, 
-                r, 
-                T, 
-                q=self.div_yield, 
-                option_type=self.option_type
-            )
-
             sorted_data[strike] = {
-                'mid': mid_vol,
-                'bid': calculate_implied_volatility_baw(
-                    prices['bid'], S, strike, r, T, q=self.div_yield, option_type=self.option_type, initial_guess=mid_vol
-                ) if prices['bid'] is not None else None,
-                'ask': calculate_implied_volatility_baw(
-                    prices['ask'], S, strike, r, T, q=self.div_yield, option_type=self.option_type, initial_guess=mid_vol
-                ) if prices['ask'] is not None else None,
-                'open_interest': prices['open_interest']
+                price_type: calculate_implied_volatility_baw(price, S, strike, r, T, q=self.div_yield, option_type=self.option_type)
+                if price_type != 'open_interest' else price
+                for price_type, price in prices.items()
             }
 
         if self.liquidity_filter_var.get():
