@@ -48,7 +48,7 @@ def sabr_model(k, params):
     alpha, beta, rho, nu, f0 = params
     return alpha * (1 + beta * k + rho * k**2 + nu * k**3 + f0 * k**4)
 
-def rbf_model(k, y, epsilon=None, smoothing=0.0):
+def rbf_model(k, y, epsilon=None):
     """
     RBF Interpolation model function.
 
@@ -56,14 +56,13 @@ def rbf_model(k, y, epsilon=None, smoothing=0.0):
         k (array-like): Log-moneyness of the option.
         y (array-like): Implied volatilities corresponding to log-moneyness.
         epsilon (float, optional): Regularization parameter for RBF. Defaults to None.
-        smoothing (float, optional): Smoothing factor for RBF. Defaults to 0.0.
 
     Returns:
         function: A callable function that interpolates implied volatilities for given log-moneyness.
     """
     if epsilon is None:
         epsilon = np.mean(np.diff(np.sort(k)))
-    rbf = RBFInterpolator(k[:, np.newaxis], y, kernel='multiquadric', epsilon=epsilon, smoothing=smoothing)
+    rbf = RBFInterpolator(k[:, np.newaxis], y, kernel='multiquadric', epsilon=epsilon, smoothing=0.000000000001)
     return rbf
 
 def objective_function(params, k, y_mid, y_bid, y_ask, model, method="WLS"):
