@@ -153,7 +153,7 @@ class PlotManagerSchwab:
 
         # Strike filter entry field
         tk.Label(selection_and_metrics_frame, text="Strike Filter:").pack(side=tk.LEFT, padx=5)
-        self.strike_filter_var = tk.StringVar(value="1.5")
+        self.strike_filter_var = tk.StringVar(value="1.25")
         self.strike_filter_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.strike_filter_var, width=10)
         self.strike_filter_entry.pack(side=tk.LEFT, padx=5)
 
@@ -215,12 +215,12 @@ class PlotManagerSchwab:
         T = (expiration_time - current_time).total_seconds() / (365 * 24 * 3600)
         r = self.risk_free_rate
 
-        if self.liquidity_filter_var.get():
-            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0}
-
         if strike_filter_value > 0.0:
             filtered_strikes = self.filter_strikes(np.array(list(sorted_data.keys())), S, num_stdev=strike_filter_value)
             sorted_data = {strike: prices for strike, prices in sorted_data.items() if strike in filtered_strikes}
+
+        if self.liquidity_filter_var.get():
+            sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['bid'] != 0.0}
 
         for strike, prices in sorted_data.items():
             sorted_data[strike] = {
