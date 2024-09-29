@@ -252,14 +252,12 @@ class PlotManagerSchwab:
 
         if self.selected_method.get() == "RBF":
             # RBF Model
-            smoothing = 0.000000000001
-            interpolator = rbf_model(np.log(x_normalized), y_mid, epsilon=epsilon_value, smoothing=smoothing)
+            interpolator = rbf_model(np.log(x_normalized), y_mid, epsilon=epsilon_value)
             fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 800)
             interpolated_y = interpolator(np.log(fine_x_normalized).reshape(-1, 1))
         elif self.selected_method.get() == "Hybrid":
             # Hybrid Model (average of RBF and RFV with specified weights)
-            smoothing = 0.000000000001
-            rbf_interpolator = rbf_model(np.log(x_normalized), y_mid, epsilon=epsilon_value, smoothing=smoothing)
+            rbf_interpolator = rbf_model(np.log(x_normalized), y_mid, epsilon=epsilon_value)
             rfv_params = fit_model(x_normalized, y_mid, y_bid, y_ask, rfv_model, method=self.selected_objective.get())
 
             fine_x_normalized = np.linspace(np.min(x_normalized), np.max(x_normalized), 800)
