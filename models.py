@@ -97,7 +97,7 @@ def barone_adesi_whaley_american_option_price(S, K, T, r, sigma, q=0.0, option_t
         raise ValueError("option_type must be 'calls' or 'puts'.")
 
 @njit
-def calculate_implied_volatility_baw(option_price, S, K, r, T, q=0.0, option_type='calls', max_iterations=100, tolerance=1e-8, initial_guess=-1.0):
+def calculate_implied_volatility_baw(option_price, S, K, r, T, q=0.0, option_type='calls', max_iterations=100, tolerance=1e-8):
     """
     Calculate the implied volatility using the Barone-Adesi Whaley model with dividends.
 
@@ -111,7 +111,6 @@ def calculate_implied_volatility_baw(option_price, S, K, r, T, q=0.0, option_typ
     - option_type (str, optional): Type of option ('calls' or 'puts'). Defaults to 'calls'.
     - max_iterations (int, optional): Maximum number of iterations for the bisection method. Defaults to 100.
     - tolerance (float, optional): Convergence tolerance. Defaults to 1e-8.
-    - initial_guess (float, optional): Initial guess for the implied volatility. Defaults to -1.0.
 
     Returns:
     - float: The implied volatility.
@@ -119,9 +118,8 @@ def calculate_implied_volatility_baw(option_price, S, K, r, T, q=0.0, option_typ
     lower_vol = 1e-5
     upper_vol = 10.0
 
-    mid_vol = (initial_guess if initial_guess > 0 else (lower_vol + upper_vol) / 2)
-
     for i in range(max_iterations):
+        mid_vol = (lower_vol + upper_vol) / 2
         price = barone_adesi_whaley_american_option_price(S, K, T, r, mid_vol, q, option_type)
 
         if abs(price - option_price) < tolerance:
@@ -131,8 +129,6 @@ def calculate_implied_volatility_baw(option_price, S, K, r, T, q=0.0, option_typ
             upper_vol = mid_vol
         else:
             lower_vol = mid_vol
-
-        mid_vol = (lower_vol + upper_vol) / 2
 
         if upper_vol - lower_vol < tolerance:
             break
