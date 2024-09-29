@@ -86,6 +86,7 @@ class PlotManagerSchwab:
         This method calls Numba-compiled functions with sample data to ensure they are precompiled,
         reducing latency during actual execution.
         """
+        barone_adesi_whaley_american_option_price(100.0, 100.0, 0.05, 0.01, 1.0, 0.2, option_type='calls')
         calculate_implied_volatility_baw(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
         k = np.array([0.1])
         slv_model(k, [0.1, 0.2, 0.3, 0.4, 0.5])
