@@ -115,12 +115,9 @@ def fit_model(x, y_mid, y_bid, y_ask, model, method="WLS"):
         list: The fitted model parameters.
     """
     k = np.log(x)
-    if model == rbf_model:
-        rbf = rbf_model(k, y_mid)
-        return rbf
-    else:
-        initial_guess = [0.2, 0.3, 0.1, 0.2, 0.1]
-        bounds = [(None, None), (None, None), (None, None), (None, None), (None, None)]
+
+    initial_guess = [0.2, 0.3, 0.1, 0.2, 0.1]
+    bounds = [(None, None), (None, None), (None, None), (None, None), (None, None)]
     
     result = minimize(objective_function, initial_guess, args=(k, y_mid, y_bid, y_ask, model, method), method='L-BFGS-B', bounds=bounds)
     return result.x
