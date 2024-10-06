@@ -109,6 +109,10 @@ class PlotManagerSchwab:
         self.coord_label = tk.Label(left_frame, text="X: N/A    Y: N/A", fg='black', bg=dropdown_frame.cget('background'))
         self.coord_label.pack(side=tk.LEFT, padx=5)
 
+        # RMSE label display
+        self.rmse_label = tk.Label(left_frame, text="RMSE: N/A", fg='black', bg=dropdown_frame.cget('background'))
+        self.rmse_label.pack(side=tk.LEFT, padx=5)
+
         right_frame = tk.Frame(dropdown_frame)
         right_frame.pack(side=tk.RIGHT, anchor=tk.E)
         metrics_frame = tk.Frame(right_frame)
@@ -273,6 +277,10 @@ class PlotManagerSchwab:
 
         fine_x = np.linspace(np.min(x), np.max(x), 800)
 
+        y_pred = np.interp(x_normalized, fine_x_normalized, interpolated_y)
+        rmse = self.calculate_rmse(y_mid, y_pred)
+        self.rmse_label.config(text=f"RMSE: {rmse:.4f}")
+
         if open_interest_value > 0.0:
             mask = open_interest > open_interest_value
             x = x[mask]
@@ -401,6 +409,21 @@ class PlotManagerSchwab:
             upper_bound = S + 2 * stdev
 
         return x[(x >= lower_bound) & (x <= upper_bound)]
+
+    def calculate_rmse(self, y_true, y_pred):
+        """
+        Calculate the Root Mean Squared Error (RMSE) between the observed and predicted implied volatilities.
+
+        Args:
+            x_normalized (array-like): Normalized strike prices.
+            y_true (array-like): Observed implied volatilities.
+            y_pred (array-like): Predicted implied volatilities from the interpolation model.
+
+        Returns:
+            float: The computed RMSE value.
+        """
+        rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
+        return rmse
     
     def remove_existing_plot_elements(self):
         """
