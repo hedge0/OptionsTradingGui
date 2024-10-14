@@ -267,8 +267,8 @@ class PlotManagerSchwab:
             rbf_interpolated_y = rbf_interpolator(np.log(fine_x_normalized).reshape(-1, 1))
             rfv_interpolated_y = rfv_model(np.log(fine_x_normalized), rfv_params)
             
-            # Weighted Averaging: RFV 75%, RBF 25%
-            interpolated_y = 0.75 * rfv_interpolated_y + 0.25 * rbf_interpolated_y
+            # Weighted Averaging: RFV 80%, RBF 20%
+            interpolated_y = 0.8 * rfv_interpolated_y + 0.2 * rbf_interpolated_y
         else:
             # Other models like SLV, RFV, SABR
             params = fit_model(x_normalized, y_mid, y_bid, y_ask, model, method=self.selected_objective.get())
