@@ -12,9 +12,9 @@ import nest_asyncio
 
 nest_asyncio.apply()
 
-from credential_manager import load_cached_credentials, save_cached_credentials
-from plot_manager_tasty import open_plot_manager_tasty
-from plot_manager_schwab import open_plot_manager_schwab
+from src.credential_manager import load_cached_credentials, save_cached_credentials
+from src.plot_manager_tasty import open_plot_manager_tasty
+from src.plot_manager_schwab import open_plot_manager_schwab
 
 config = load_cached_credentials()
 risk_free_rate = 0.0

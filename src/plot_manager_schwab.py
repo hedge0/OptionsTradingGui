@@ -1,8 +1,12 @@
 import asyncio
+import httpx
+import nest_asyncio
+
+nest_asyncio.apply()
+
 from datetime import datetime, timedelta
-import math
+from schwab.auth import easy_client
 import threading
-import time
 import numpy as np
 from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler
@@ -10,46 +14,46 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from tastytrade import DXLinkStreamer
-from tastytrade.dxfeed import EventType
 
-from models import calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price
-from interpolations import slv_model, rfv_model, sabr_model, rbf_model, fit_model
-from plot_interaction import on_mouse_move, on_scroll, on_press, on_release
+from src.models import calculate_implied_volatility_baw, barone_adesi_whaley_american_option_price
+from src.interpolations import slv_model, rfv_model, sabr_model, rbf_model, fit_model
+from src.plot_interaction import on_mouse_move, on_scroll, on_press, on_release
 
-class PlotManagerTasty:
-    def __init__(self, root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
+class PlotManagerSchwab:
+    def __init__(self, root, ticker, api_key, secret, callback_url, selected_date, option_type, risk_free_rate):
         """
-        Initialize the PlotManager class.
+        Initialize the PlotManagerSchwab class.
 
         Args:
             root (tk.Tk): The root window for the Tkinter GUI.
             ticker (str): The ticker symbol of the underlying asset.
-            session (Session): The Tastytrade session object.
-            expiration_to_strikes_map (dict): Mapping of expiration dates to their corresponding strikes.
-            streamer_to_strike_map (dict): Mapping of streamer symbols to their strike prices.
+            api_key (str): The API key for authentication with Schwab.
+            secret (str): The API secret for authentication with Schwab.
+            callback_url (str): The callback URL for Schwab's authentication process.
             selected_date (str): The selected expiration date.
             option_type (str): The type of option ('calls' or 'puts').
-            risk_free_rate (float): The risk-free rate used for calculations.
+            risk_free_rate (float): The risk-free rate (in percentage) used for calculations.
         """
         self.root = root
-        self.session = session
-        self.expiration_to_strikes_map = expiration_to_strikes_map
-        self.streamer_to_strike_map = streamer_to_strike_map
+        self.api_key = api_key
+        self.secret = secret
+        self.callback_url = callback_url
         self.selected_date = selected_date
         self.option_type = option_type
         self.risk_free_rate = risk_free_rate / 100
         self.ticker = ticker
 
-        self.root.title(f"{self.ticker} - {self.selected_date} - {self.option_type.capitalize()} - Tasty")
+        self.root.title(f"{self.ticker} - {self.selected_date} - {self.option_type.capitalize()} - Schwab")
         self.figure, self.ax = plt.subplots(figsize=(8, 6))
         self.canvas = FigureCanvasTkAgg(self.figure, master=root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
         self.selected_method = tk.StringVar(value="Hybrid")
         self.selected_objective = tk.StringVar(value="WLS")
         self.press_event = None
-        self.quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None})
+        self.quote_data = defaultdict(lambda: {"bid": None, "ask": None, "mid": None, "open_interest": None})
         self.underlying_price = 0.0
+        self.div_yield = 0.0
 
         # Configure the dropdown style
         style = ttk.Style()
@@ -75,9 +79,6 @@ class PlotManagerTasty:
 
         self.precompile_numba_functions()
 
-        # Add stop_event for graceful shutdown
-        self.stop_event = asyncio.Event()
-
     def precompile_numba_functions(self):
         """
         Precompile Numba functions to improve performance.
@@ -85,6 +86,7 @@ class PlotManagerTasty:
         This method calls Numba-compiled functions with sample data to ensure they are precompiled,
         reducing latency during actual execution.
         """
+        barone_adesi_whaley_american_option_price(100.0, 100.0, 0.05, 0.01, 1.0, 0.2, option_type='calls')
         calculate_implied_volatility_baw(0.1, 100.0, 100.0, 0.01, 0.5, option_type='calls')
         k = np.array([0.1])
         slv_model(k, [0.1, 0.2, 0.3, 0.4, 0.5])
@@ -106,6 +108,10 @@ class PlotManagerTasty:
         # Coordinate label display
         self.coord_label = tk.Label(left_frame, text="X: N/A    Y: N/A", fg='black', bg=dropdown_frame.cget('background'))
         self.coord_label.pack(side=tk.LEFT, padx=5)
+
+        # RMSE label display
+        self.rmse_label = tk.Label(left_frame, text="RMSE: N/A", fg='black', bg=dropdown_frame.cget('background'))
+        self.rmse_label.pack(side=tk.LEFT, padx=5)
 
         right_frame = tk.Frame(dropdown_frame)
         right_frame.pack(side=tk.RIGHT, anchor=tk.E)
@@ -141,6 +147,12 @@ class PlotManagerTasty:
         self.mispricing_var = tk.StringVar(value="0.0")
         self.mispricing_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.mispricing_var, width=10)
         self.mispricing_entry.pack(side=tk.LEFT, padx=5)
+
+        # Open Interest filter entry field
+        tk.Label(selection_and_metrics_frame, text="Open Interest:").pack(side=tk.LEFT, padx=5)
+        self.open_interest_var = tk.StringVar(value="0.0")
+        self.open_interest_entry = tk.Entry(selection_and_metrics_frame, textvariable=self.open_interest_var, width=10)
+        self.open_interest_entry.pack(side=tk.LEFT, padx=5)
 
         # Strike filter entry field
         tk.Label(selection_and_metrics_frame, text="Strike Filter:").pack(side=tk.LEFT, padx=5)
@@ -196,9 +208,9 @@ class PlotManagerTasty:
         data_dict = self.quote_data
         sorted_data = dict(sorted(data_dict.items()))
 
-        strike_filter_value, mispricing_value, epsilon_value = self.validate_user_inputs()
-        if strike_filter_value is None or mispricing_value is None or epsilon_value is None:
-            return 
+        strike_filter_value, mispricing_value, open_interest_value, epsilon_value = self.validate_user_inputs()
+        if strike_filter_value is None or mispricing_value is None or open_interest_value is None or epsilon_value is None:
+            return
 
         S = self.underlying_price
         current_time = datetime.now()
@@ -215,22 +227,19 @@ class PlotManagerTasty:
 
         for strike, prices in sorted_data.items():
             sorted_data[strike] = {
-                price_type: calculate_implied_volatility_baw(price, S, strike, r, T, option_type=self.option_type)
+                price_type: calculate_implied_volatility_baw(price, S, strike, r, T, q=self.div_yield, option_type=self.option_type)
+                if price_type != 'open_interest' else price
                 for price_type, price in prices.items()
             }
 
         if self.liquidity_filter_var.get():
             sorted_data = {strike: prices for strike, prices in sorted_data.items() if prices['mid'] > 0.005}
 
-        x = np.array(list(sorted_data.keys()))
+        x = np.array(list(sorted_data.keys())) 
         y_bid = np.array([prices['bid'] for prices in sorted_data.values()])
         y_ask = np.array([prices['ask'] for prices in sorted_data.values()])
         y_mid = np.array([prices['mid'] for prices in sorted_data.values()])
-        
-        if len(x) == 0:
-            messagebox.showwarning("No Data", "All data points were filtered out. Adjust the spread filter.")
-            return
-        self.remove_existing_plot_elements()
+        open_interest = np.array([prices['open_interest'] for prices in sorted_data.values()])
 
         # Normalize X values here
         scaler = MinMaxScaler()
@@ -267,13 +276,31 @@ class PlotManagerTasty:
             interpolated_y = model(np.log(fine_x_normalized), params)
 
         fine_x = np.linspace(np.min(x), np.max(x), 800)
+
+        y_pred = np.interp(x_normalized, fine_x_normalized, interpolated_y)
+        rmse = self.calculate_rmse(y_mid, y_pred)
+        self.rmse_label.config(text=f"RMSE: {rmse:.4f}")
+
+        if open_interest_value > 0.0:
+            mask = open_interest > open_interest_value
+            x = x[mask]
+            y_bid = y_bid[mask]
+            y_ask = y_ask[mask]
+            y_mid = y_mid[mask]
+            open_interest = open_interest[mask]
+
+        if len(x) == 0:
+            messagebox.showwarning("No Data", "All data points were filtered out. Adjust the spread filter.")
+            return
+        self.remove_existing_plot_elements()
+
         outliers_indices = []
         if mispricing_value > 0.0:
             for i, x_value in enumerate(x):
                 closest_index = np.argmin(np.abs(fine_x - x_value))
                 interpolated_y_value = interpolated_y[closest_index]
                 y_mid_value = data_dict[x_value]['mid']
-                option_price = barone_adesi_whaley_american_option_price(S, x_value, T, r, interpolated_y_value, option_type=self.option_type)
+                option_price = barone_adesi_whaley_american_option_price(S, x_value, T, r, interpolated_y_value, q=self.div_yield, option_type=self.option_type)
                 diff = abs(y_mid_value - option_price)
                 
                 if diff > mispricing_value:
@@ -321,11 +348,11 @@ class PlotManagerTasty:
 
     def validate_user_inputs(self):
         """
-        Validates the strike filter, mispricing, and epsilon values entered by the user.
+        Validates the strike filter, mispricing, open interest, and epsilon values entered by the user.
         
         Returns:
             tuple: A tuple containing the validated values for strike_filter_value, mispricing_value, 
-            and epsilon_value. If any validation fails, None is returned for all.
+            open_interest_value, and epsilon_value. If any validation fails, None is returned for all.
         """
         try:
             strike_filter_value = float(self.strike_filter_var.get())
@@ -333,7 +360,7 @@ class PlotManagerTasty:
                 raise ValueError("Strike Filter must be 0.0 or above.")
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Strike Filter (0.0 or above).")
-            return None, None, None
+            return None, None, None, None
 
         try:
             mispricing_value = float(self.mispricing_var.get())
@@ -341,7 +368,15 @@ class PlotManagerTasty:
                 raise ValueError("Mispricing must be 0.0 or above.")
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Mispricing (0.0 or above).")
-            return None, None, None
+            return None, None, None, None
+
+        try:
+            open_interest_value = float(self.open_interest_var.get())
+            if open_interest_value < 0.0:
+                raise ValueError("Open Interest must be 0.0 or above.")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for Open Interest (0.0 or above).")
+            return None, None, None, None
 
         try:
             epsilon_value = float(self.epsilon_var.get())
@@ -349,9 +384,9 @@ class PlotManagerTasty:
                 raise ValueError("Epsilon must be 0.0 or above.")
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter a valid number for Epsilon (0.0 or above).")
-            return None, None, None
+            return None, None, None, None
 
-        return strike_filter_value, mispricing_value, epsilon_value
+        return strike_filter_value, mispricing_value, open_interest_value, epsilon_value
 
     def filter_strikes(self, x, S, num_stdev=1.25, two_sigma_move=False):
         """
@@ -374,6 +409,21 @@ class PlotManagerTasty:
             upper_bound = S + 2 * stdev
 
         return x[(x >= lower_bound) & (x <= upper_bound)]
+
+    def calculate_rmse(self, y_true, y_pred):
+        """
+        Calculate the Root Mean Squared Error (RMSE) between the observed and predicted implied volatilities.
+
+        Args:
+            x_normalized (array-like): Normalized strike prices.
+            y_true (array-like): Observed implied volatilities.
+            y_pred (array-like): Predicted implied volatilities from the interpolation model.
+
+        Returns:
+            float: The computed RMSE value.
+        """
+        rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
+        return rmse
     
     def remove_existing_plot_elements(self):
         """
@@ -409,99 +459,66 @@ class PlotManagerTasty:
                 line.remove()
             self.ask_lines = []
 
-    def update_mid_price(self, quote):
-        """
-        Update the mid price of the underlying asset based on live quotes.
-
-        Args:
-            quote (Quote): The latest quote object containing bid and ask prices.
-
-        This method calculates the mid price from the bid and ask prices and updates
-        the underlying asset price accordingly.
-        """
-        bid_price = quote.bidPrice
-        ask_price = quote.askPrice
-        if bid_price is not None and ask_price is not None:
-            self.underlying_price = float(math.floor((bid_price + ask_price) / 2 * 100) / 100)
-
-    def process_quote(self, quote):
-        """
-        Process incoming quote data and update the internal quote dictionary.
-
-        Args:
-            quote (Quote): The latest quote object containing bid and ask prices.
-
-        This method updates the quote data dictionary with the latest bid, ask, and mid prices
-        for each strike price based on the event symbol.
-        """
-        event_symbol = quote.eventSymbol
-        bid_price = quote.bidPrice
-        ask_price = quote.askPrice
-        strike_price = self.streamer_to_strike_map.get(event_symbol)
-        if strike_price is not None and bid_price is not None and ask_price is not None:
-            mid_price = round(float((bid_price + ask_price) / 2), 3)
-            self.quote_data[float(strike_price)] = {
-                "bid": float(bid_price),
-                "ask": float(ask_price),
-                "mid": float(mid_price)
-            }
-
-    async def stream_live_prices(self, session, subs_list):
-        """
-        Stream live option prices and update the plot in real time.
-
-        Args:
-            session (Session): The Tastytrade session object.
-            subs_list (list): A list of symbols to subscribe to for streaming quotes.
-
-        This method continuously receives live quotes from the DXLinkStreamer, updates the
-        internal quote dictionary, and refreshes the plot at regular intervals.
-        """
-        async with DXLinkStreamer(session) as streamer:
-            await streamer.subscribe(EventType.QUOTE, subs_list)
-            start_time = time.time()
-            try:
-                while not self.stop_event.is_set():
-                    quote = await streamer.get_event(EventType.QUOTE)
-                    self.process_quote(quote)
-
-                    if time.time() - start_time >= 1:
-                        self.update_plot()
-                        start_time = time.time()
-            except asyncio.CancelledError:
-                pass
-
-    async def stream_raw_quotes(self, session, ticker_list):
-        """
-        Stream live quotes for the underlying asset and update the mid price.
-
-        Args:
-            session (Session): The Tastytrade session object.
-            ticker_list (list): A list of ticker symbols to subscribe to for streaming quotes.
-
-        This method continuously receives live quotes for the underlying asset from the DXLinkStreamer,
-        updating the mid price in real time.
-        """
-        async with DXLinkStreamer(session) as streamer:
-            await streamer.subscribe(EventType.QUOTE, ticker_list)
-            try:
-                while not self.stop_event.is_set():
-                    quote = await streamer.get_event(EventType.QUOTE)
-                    self.update_mid_price(quote)
-            except asyncio.CancelledError:
-                pass
-
     async def start_streamers(self):
         """
         Start the streaming tasks for options prices and underlying asset quotes.
-
-        This method creates and runs two asyncio tasks: one for streaming options prices
-        and another for streaming raw quotes of the underlying asset.
         """
+        session = easy_client(
+            token_path='token.json',
+            api_key=self.api_key,
+            app_secret=self.secret,
+            callback_url=self.callback_url,
+            asyncio=True
+        )
+
+        try:
+            respDiv = await session.get_quote(self.ticker)
+            assert respDiv.status_code == httpx.codes.OK
+            div = respDiv.json()
+            self.div_yield = float(div[self.ticker]["fundamental"]["divYield"]) / 100
+        except Exception as e:
+            print(f"An unexpected error occurred in options stream: {e}")
+
+        option_date = datetime.strptime(self.selected_date, "%Y-%m-%d").date()
+        contract_type = session.Options.ContractType.CALL if self.option_type == "calls" else session.Options.ContractType.PUT
+        chain_primary_key = "callExpDateMap" if self.option_type == "calls" else "putExpDateMap"
+
+        async def stream_options():
+            while True:
+                try:
+                    respChain = await session.get_option_chain(self.ticker, from_date=option_date, to_date=option_date, contract_type=contract_type)
+                    assert respChain.status_code == httpx.codes.OK
+                    chain = respChain.json()
+
+                    if chain["underlyingPrice"] is not None:
+                        self.underlying_price = float(chain["underlyingPrice"])
+
+                    chain_secondary_key = next(iter(chain[chain_primary_key].keys()))
+                    for strike_price in chain[chain_primary_key][chain_secondary_key]:
+                        option_json = chain[chain_primary_key][chain_secondary_key][strike_price][0]
+                        bid_price = option_json["bid"]
+                        ask_price = option_json["ask"]
+                        open_interest = option_json["openInterest"]
+
+                        if strike_price is not None and bid_price is not None and ask_price is not None and open_interest is not None:
+                            mid_price = round(float((bid_price + ask_price) / 2), 3)
+                            self.quote_data[float(strike_price)] = {
+                                "bid": float(bid_price),
+                                "ask": float(ask_price),
+                                "mid": float(mid_price),
+                                "open_interest": float(open_interest)
+                            }
+
+                    self.update_plot()
+                except Exception as e:
+                    print(f"An unexpected error occurred in options stream: {e}")
+
+                await asyncio.sleep(3)
+
         self.tasks = [
-            asyncio.create_task(self.stream_live_prices(self.session, self.expiration_to_strikes_map[datetime.strptime(self.selected_date, '%Y-%m-%d').date()][self.option_type])),
-            asyncio.create_task(self.stream_raw_quotes(self.session, [self.ticker]))
+            asyncio.create_task(stream_options())
         ]
+
         try:
             await asyncio.gather(*self.tasks)
         except asyncio.CancelledError:
@@ -511,32 +528,31 @@ class PlotManagerTasty:
         """
         Stop the streaming tasks and close the streamers.
 
-        This method sets the stop event, cancels the asyncio tasks, and ensures
+        This method cancels the asyncio tasks, and ensures
         that all streamers are properly closed.
         """
-        self.stop_event.set()
         for task in self.tasks:
             task.cancel()
 
-def open_plot_manager_tasty(ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate):
+def open_plot_manager_schwab(ticker, api_key, secret, callback_url, selected_date, option_type, risk_free_rate):
     """
     Open the plot manager to visualize the implied volatility smile.
 
     Args:
         ticker (str): The ticker symbol of the underlying asset.
-        session (Session): The Tastytrade session object.
-        expiration_to_strikes_map (dict): Mapping of expiration dates to their corresponding strikes.
-        streamer_to_strike_map (dict): Mapping of streamer symbols to their strike prices.
+        api_key (str): The API key for authentication with Schwab.
+        secret (str): The API secret for authentication with Schwab.
+        callback_url (str): The callback URL for Schwab's authentication process.
         selected_date (str): The selected expiration date.
         option_type (str): The type of option ('calls' or 'puts').
         risk_free_rate (float): The risk-free rate used for calculations.
 
-    This function creates a Tkinter root window and initializes the PlotManager
+    This function creates a Tkinter root window and initializes the PlotManagerSchwab
     to start streaming data and updating the plot in real time.
     """
     root = tk.Toplevel()
-    plot_manager = PlotManagerTasty(root, ticker, session, expiration_to_strikes_map, streamer_to_strike_map, selected_date, option_type, risk_free_rate)
-    
+    plot_manager = PlotManagerSchwab(root, ticker, api_key, secret, callback_url, selected_date, option_type, risk_free_rate)
+
     def run_asyncio_tasks():
         asyncio.run(plot_manager.start_streamers())
 
@@ -550,4 +566,3 @@ def open_plot_manager_tasty(ticker, session, expiration_to_strikes_map, streamer
     root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
     stream_thread.join()
-    
