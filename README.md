@@ -41,4 +41,4 @@ You can install these libraries by running the following command:
 
 ## License
 
-This project is licensed under an All Rights Reserved (ARR) license.
+This project is licensed under the MIT License.
